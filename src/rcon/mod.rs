@@ -36,12 +36,14 @@ pub fn send_rcon_command(
     socket.flush().unwrap();
 
     loop {
+        // only wait for a relevant response message till timeout
         let elapsed = timestamp_send.elapsed().unwrap();
         if elapsed >= timeout {
             todo!(); // TODO: return some kinda error
         }
 
-        let ws_message_in = socket.read().unwrap(); // TODO: if no message is ever received, we'll be stuck here. fix!
+        // TODO: if no message is ever received, we'll be stuck here. fix! (make the given timeout cover this case too)
+        let ws_message_in = socket.read().unwrap();
         let text = ws_message_in.to_text().unwrap();
         let rcon_response: RconResponse = serde_json::from_str(text).unwrap();
         if rcon_response.Identifier == rcon_command.Identifier {
