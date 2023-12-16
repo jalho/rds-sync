@@ -98,10 +98,9 @@ pub fn env_time(
     return EnvTime(float);
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct PlayerPos {
     steamd_id: String,
-    display_name: String,
     position: (f64, f64, f64),
     rotation: (f64, f64, f64),
 }
@@ -124,34 +123,23 @@ pub fn global_playerlistpos(
             continue;
         }
 
-        let (steam_id_raw, player_name, player_position_raw, player_rotation_raw) =
-            parse_playerlistpost(line);
-
-        player_list.push(PlayerPos {
-            display_name: player_name.to_string(),
-            position: parse_float_triple(&player_position_raw),
-            rotation: parse_float_triple(&player_rotation_raw),
-            steamd_id: steam_id_raw.to_string(),
-        });
+        player_list.push(parse_playerlistpost(line));
     }
 
     return player_list;
 }
 
-fn parse_playerlistpost(arg: &str) -> (String, String, String, String) {
-    // TODO: won't work if player name contains whitespace? -- fix!
+fn parse_playerlistpost(arg: &str) -> PlayerPos {
     let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get regex as arg?
     let captures = re.captures(arg).unwrap();
     let steam_id_raw = captures[1].to_string();
-    let player_name = captures[2].to_string();
     let player_position_raw = captures[3].to_string();
     let player_rotation_raw = captures[4].to_string();
-    return (
-        steam_id_raw,
-        player_name,
-        player_position_raw,
-        player_rotation_raw,
-    );
+    return PlayerPos {
+        position: parse_float_triple(&player_position_raw),
+        rotation: parse_float_triple(&player_rotation_raw),
+        steamd_id: steam_id_raw.to_string(),
+    };
 }
 
 fn parse_float_triple(arg: &String) -> (f64, f64, f64) {
@@ -180,7 +168,7 @@ fn parse_float_triple(arg: &String) -> (f64, f64, f64) {
     return parsed;
 }
 
-// TODO: define tests in a separate file
+// TODO: move tests in a separate file
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,24 +191,11 @@ mod tests {
             parse_playerlistpost(
                 "76561198135242017 Jeti        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)",
             ),
-            (
-                "76561198135242017".to_string(),
-                "Jeti".to_string(),
-                "-1027.08, 0.31, 668.11".to_string(),
-                "-0.72, 0.00, 0.69".to_string()
-            )
+            PlayerPos {
+                position: (-1027.08, 0.31, 668.11),
+                rotation: (-0.72, 0.00, 0.69),
+                steamd_id: "76561198135242017".to_string(),
+            }
         );
-        // TODO: add support for 2-part player names (i.e. name containing whitespace)
-        // assert_eq!(
-        //     parse_playerlistpost(
-        //         "76561198135242017 Jeti Kaksosane        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)",
-        //     ),
-        //     (
-        //         "76561198135242017".to_string(),
-        //         "Jeti Kaksosane".to_string(),
-        //         "-1027.08, 0.31, 668.11".to_string(),
-        //         "-0.72, 0.00, 0.69".to_string()
-        //     )
-        // );
     }
 }
