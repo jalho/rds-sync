@@ -49,8 +49,6 @@ fn main() {
         println!("{}", list_pretty);
     }
 
-    // TODO: add rcon::global_listtoolcupboards
-
     // TODO: sync remote RCON state with local state regularly
     //       - rcon::env_time
     //       - rcon::global_listtoolcupboards
