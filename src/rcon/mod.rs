@@ -18,7 +18,7 @@ struct RconResponse {
 }
 
 pub fn send_rcon_command(
-    mut socket: WebSocket<MaybeTlsStream<TcpStream>>,
+    socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     rcon_symbol: &str,
     timeout: std::time::Duration,
 ) -> String {
@@ -69,11 +69,21 @@ pub struct PlayerInfo {
 pub type PlayerList = Vec<PlayerInfo>;
 
 pub fn playerlist(
-    websocket: WebSocket<MaybeTlsStream<TcpStream>>,
+    websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
 ) -> Result<PlayerList, serde_json::Error> {
-    let rcon_symbol = "playerlist";
+    let rcon_symbol = "playerlist"; // TODO: fully qualify this (add the "prefix.")
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
     let response_parsed = serde_json::from_str(&response_raw);
     return response_parsed;
+}
+
+pub fn time(
+    websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
+    timeout: std::time::Duration,
+) {
+    let rcon_symbol = "env.time";
+    let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
+    println!("{}", response_raw);
+    // TODO: parse a float from response_raw -- it's something like 'env.time: "10.63853"'
 }
