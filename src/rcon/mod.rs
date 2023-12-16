@@ -115,10 +115,6 @@ pub fn global_playerlistpos(
     let rcon_symbol = "global.playerlistpos";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
 
-    // TODO: won't work if player name contains whitespace? -- fix!
-    // Match e.g. `76561198135242017 Jeti        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)`
-    let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get Regex as arg?
-
     let mut player_list: PlayerPosList = Vec::new();
     let mut line_number = 0;
     for line in response_raw.lines() {
@@ -128,16 +124,13 @@ pub fn global_playerlistpos(
             continue;
         }
 
-        let captures = re.captures(&line).unwrap();
-        let steam_id_raw = &captures[1];
-        let player_name = &captures[2];
-        let player_position_raw = &captures[3];
-        let player_rotation_raw = &captures[4];
+        let (steam_id_raw, player_name, player_position_raw, player_rotation_raw) =
+            parse_playerlistpost(line);
 
         player_list.push(PlayerPos {
             display_name: player_name.to_string(),
-            position: parse_float_triple(player_position_raw),
-            rotation: parse_float_triple(player_rotation_raw),
+            position: parse_float_triple(&player_position_raw),
+            rotation: parse_float_triple(&player_rotation_raw),
             steamd_id: steam_id_raw.to_string(),
         });
     }
@@ -145,12 +138,28 @@ pub fn global_playerlistpos(
     return player_list;
 }
 
-fn parse_float_triple(arg: &str) -> (f64, f64, f64) {
+fn parse_playerlistpost(arg: &str) -> (String, String, String, String) {
+    // TODO: won't work if player name contains whitespace? -- fix!
+    let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get regex as arg?
+    let captures = re.captures(arg).unwrap();
+    let steam_id_raw = captures[1].to_string();
+    let player_name = captures[2].to_string();
+    let player_position_raw = captures[3].to_string();
+    let player_rotation_raw = captures[4].to_string();
+    return (
+        steam_id_raw,
+        player_name,
+        player_position_raw,
+        player_rotation_raw,
+    );
+}
+
+fn parse_float_triple(arg: &String) -> (f64, f64, f64) {
     let parts: Vec<String> = arg.split(",").map(String::from).collect();
 
     let mut parsed = (0.0, 0.0, 0.0);
 
-    for idx in 0..2 {
+    for idx in 0..=2 {
         let part = &parts[idx];
         let trimmed = part.trim();
         let float = trimmed.parse::<f64>().unwrap();
@@ -169,4 +178,49 @@ fn parse_float_triple(arg: &str) -> (f64, f64, f64) {
     }
 
     return parsed;
+}
+
+// TODO: define tests in a separate file
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_float_triple() {
+        assert_eq!(
+            parse_float_triple(&"821.94, 0.00, 676.77".to_string()),
+            (821.94, 0.00, 676.77)
+        );
+        assert_eq!(
+            parse_float_triple(&"821.94, 0.00, -676.77".to_string()),
+            (821.94, 0.00, -676.77)
+        );
+    }
+
+    #[test]
+    fn test_parse_playerlistpost() {
+        assert_eq!(
+            parse_playerlistpost(
+                "76561198135242017 Jeti        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)",
+            ),
+            (
+                "76561198135242017".to_string(),
+                "Jeti".to_string(),
+                "-1027.08, 0.31, 668.11".to_string(),
+                "-0.72, 0.00, 0.69".to_string()
+            )
+        );
+        // TODO: add support for 2-part player names (i.e. name containing whitespace)
+        // assert_eq!(
+        //     parse_playerlistpost(
+        //         "76561198135242017 Jeti Kaksosane        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)",
+        //     ),
+        //     (
+        //         "76561198135242017".to_string(),
+        //         "Jeti Kaksosane".to_string(),
+        //         "-1027.08, 0.31, 668.11".to_string(),
+        //         "-0.72, 0.00, 0.69".to_string()
+        //     )
+        // );
+    }
 }
