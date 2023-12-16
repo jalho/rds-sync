@@ -91,9 +91,56 @@ pub fn env_time(
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
 
     // Match the float in e.g. `env.time: "10.63853"`
-    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap();
+    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap(); // TODO: get Regex as arg?
     let captures = re.captures(&response_raw).unwrap();
     let match_group = &captures[1];
     let float = match_group.parse::<f64>().unwrap();
     return EnvTime(float);
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct PlayerPos {
+    steamd_id: String,
+    display_name: String,
+    position: (f64, f64, f64),
+    rotation: (f64, f64, f64),
+}
+pub type PlayerPosList = Vec<PlayerPos>;
+
+/// RCON command `global.playerlistpos`
+pub fn global_playerlistpos(
+    websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
+    timeout: std::time::Duration,
+) -> PlayerPosList {
+    let rcon_symbol = "global.playerlistpos";
+    let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
+
+    // TODO: won't work if player name contains whitespace? -- fix!
+    // Match e.g. `76561198135242017 Jeti        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)`
+    let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get Regex as arg?
+
+    let mut player_list: PlayerPosList = Vec::new();
+    let mut line_number = 0;
+    for line in response_raw.lines() {
+        line_number = line_number + 1;
+
+        if line_number == 1 {
+            continue;
+        }
+
+        let captures = re.captures(&line).unwrap();
+        let steam_id_raw = &captures[1];
+        let player_name = &captures[2];
+        let _player_position_raw = &captures[3];
+        let _player_rotation_raw = &captures[4];
+
+        player_list.push(PlayerPos {
+            display_name: player_name.to_string(),
+            position: (0.0, 0.0, 0.0), // TODO: parse
+            rotation: (0.0, 0.0, 0.0), // TODO: parse
+            steamd_id: steam_id_raw.to_string(),
+        });
+    }
+
+    return player_list;
 }

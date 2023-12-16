@@ -36,4 +36,10 @@ fn main() {
 
     let env_time = rcon::env_time(&mut websocket, rcon_command_timeout);
     println!("{:?}", env_time);
+
+    let players = rcon::global_playerlistpos(&mut websocket, rcon_command_timeout);
+    for player in players {
+        let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
+        println!("{}", playerlist_pretty);
+    }
 }
