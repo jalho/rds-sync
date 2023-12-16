@@ -26,13 +26,13 @@ fn main() {
         }
     };
 
-    let timeout = std::time::Duration::from_millis(500);
+    let rcon_command_timeout = std::time::Duration::from_millis(500);
 
-    let playerlist_response_parsed = rcon::playerlist(&mut websocket, timeout).unwrap();
-    for player_info in &playerlist_response_parsed {
-        let playerlist_pretty = serde_json::to_string_pretty(&player_info).unwrap();
+    let players = rcon::global_playerlist(&mut websocket, rcon_command_timeout).unwrap();
+    for player in players {
+        let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
         println!("{}", playerlist_pretty);
     }
 
-    rcon::time(&mut websocket, timeout);
+    rcon::env_time(&mut websocket, rcon_command_timeout);
 }

@@ -68,17 +68,17 @@ pub struct PlayerInfo {
 }
 pub type PlayerList = Vec<PlayerInfo>;
 
-pub fn playerlist(
+pub fn global_playerlist(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
 ) -> Result<PlayerList, serde_json::Error> {
-    let rcon_symbol = "playerlist"; // TODO: fully qualify this (add the "prefix.")
+    let rcon_symbol = "global.playerlist";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
     let response_parsed = serde_json::from_str(&response_raw);
     return response_parsed;
 }
 
-pub fn time(
+pub fn env_time(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
 ) {
