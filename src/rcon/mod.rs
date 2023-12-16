@@ -147,8 +147,6 @@ pub fn global_listtoolcupboards(
         }
         let tc = parse_listtoolcupboards(line);
         tc_list.push(tc);
-
-        println!("line #{}: {}", line_number, line);
     }
 
     return tc_list;
