@@ -72,8 +72,8 @@ pub fn playerlist(
     websocket: WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
 ) -> Result<PlayerList, serde_json::Error> {
-    let playerlist_rcon_symbol = "playerlist";
-    let playerlist_response_raw = send_rcon_command(websocket, playerlist_rcon_symbol, timeout);
-    let result_playerlist_response_parsed = serde_json::from_str(&playerlist_response_raw);
-    return result_playerlist_response_parsed;
+    let rcon_symbol = "playerlist";
+    let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
+    let response_parsed = serde_json::from_str(&response_raw);
+    return response_parsed;
 }
