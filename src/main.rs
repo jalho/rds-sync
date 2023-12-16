@@ -1,19 +1,15 @@
 mod rcon;
 
 #[derive(clap::Parser, Debug)]
-#[command(author, version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    #[arg(long)]
+    rcon_password: String,
 }
 
 fn main() {
-    let addr: &str = "ws://rds-remote:28016/SET_ME"; // TODO: get RCON password as input
+    // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
+    let args = <Args as clap::Parser>::parse();
+    let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
     let (websocket, _) = tungstenite::connect(addr).unwrap();
 
     let timeout = std::time::Duration::from_millis(500);
