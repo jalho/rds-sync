@@ -30,8 +30,8 @@ fn main() {
 
     let players = rcon::global_playerlist(&mut websocket, rcon_command_timeout);
     for player in players {
-        let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
-        println!("{}", playerlist_pretty);
+        let list_pretty = serde_json::to_string_pretty(&player).unwrap();
+        println!("{}", list_pretty);
     }
 
     let env_time = rcon::env_time(&mut websocket, rcon_command_timeout);
@@ -39,8 +39,14 @@ fn main() {
 
     let players = rcon::global_playerlistpos(&mut websocket, rcon_command_timeout);
     for player in players {
-        let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
-        println!("{}", playerlist_pretty);
+        let list_pretty = serde_json::to_string_pretty(&player).unwrap();
+        println!("{}", list_pretty);
+    }
+
+    let tcs = rcon::global_listtoolcupboards(&mut websocket, rcon_command_timeout);
+    for tc in tcs {
+        let list_pretty = serde_json::to_string_pretty(&tc).unwrap();
+        println!("{}", list_pretty);
     }
 
     // TODO: add rcon::global_listtoolcupboards

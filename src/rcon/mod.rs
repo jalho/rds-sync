@@ -123,13 +123,38 @@ pub fn global_playerlistpos(
             continue;
         }
 
-        player_list.push(parse_playerlistpost(line));
+        player_list.push(parse_playerlistpos(line));
     }
 
     return player_list;
 }
 
-fn parse_playerlistpost(arg: &str) -> PlayerPos {
+/// RCON command `global.listtoolcupboards`
+pub fn global_listtoolcupboards(
+    websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
+    timeout: std::time::Duration,
+) -> ToolcupboardPosList {
+    let rcon_symbol = "global.listtoolcupboards";
+    let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
+
+    let mut tc_list: ToolcupboardPosList = Vec::new();
+    let mut line_number = 0;
+    for line in response_raw.lines() {
+        line_number = line_number + 1;
+
+        if line_number == 1 {
+            continue;
+        }
+        let tc = parse_listtoolcupboards(line);
+        tc_list.push(tc);
+
+        println!("line #{}: {}", line_number, line);
+    }
+
+    return tc_list;
+}
+
+fn parse_playerlistpos(arg: &str) -> PlayerPos {
     let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get regex as arg?
     let captures = re.captures(arg).unwrap();
     let steam_id_raw = captures[1].to_string();
@@ -139,6 +164,27 @@ fn parse_playerlistpost(arg: &str) -> PlayerPos {
         position: parse_float_triple(&player_position_raw),
         rotation: parse_float_triple(&player_rotation_raw),
         steamd_id: steam_id_raw.to_string(),
+    };
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct ToolcupboardPos {
+    entity_id: String,
+    position: (f64, f64, f64),
+    auth_count: u32,
+}
+type ToolcupboardPosList = Vec<ToolcupboardPos>;
+
+fn parse_listtoolcupboards(arg: &str) -> ToolcupboardPos {
+    let re = regex::Regex::new(r#"(\d{6})\s+\((.*)\)\s+(\d+)"#).unwrap(); // TODO: get regex as arg?
+    let captures = re.captures(arg).unwrap();
+    let entity_id_raw = captures[1].to_string();
+    let position_raw = captures[2].to_string();
+    let auth_count_raw = captures[3].to_string();
+    return ToolcupboardPos {
+        entity_id: entity_id_raw.to_string(),
+        position: parse_float_triple(&position_raw),
+        auth_count: auth_count_raw.parse::<u32>().unwrap(),
     };
 }
 
@@ -186,15 +232,27 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_playerlistpost() {
+    fn test_parse_playerlistpos() {
         assert_eq!(
-            parse_playerlistpost(
+            parse_playerlistpos(
                 "76561198135242017 Jeti        (-1027.08, 0.31, 668.11) (-0.72, 0.00, 0.69)",
             ),
             PlayerPos {
                 position: (-1027.08, 0.31, 668.11),
                 rotation: (-0.72, 0.00, 0.69),
                 steamd_id: "76561198135242017".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_listtoolcupboards() {
+        assert_eq!(
+            parse_listtoolcupboards("754298   (278.51, 37.18, 83.82)     0",),
+            ToolcupboardPos {
+                auth_count: 0,
+                entity_id: "754298".to_string(),
+                position: (278.51, 37.18, 83.82),
             }
         );
     }
