@@ -42,4 +42,19 @@ fn main() {
         let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
         println!("{}", playerlist_pretty);
     }
+
+    // TODO: add rcon::global_listtoolcupboards
+
+    // TODO: sync remote RCON state with local state regularly
+    //       - rcon::env_time
+    //       - rcon::global_listtoolcupboards
+    //       - rcon::global_playerlist
+    //       - rcon::global_playerlistpos
+
+    // TODO: accept client WebSocket connections
+    //       - check auth or just use firewall?
+
+    // TODO: sync local RCON state with connected clients regularly
+    //       - aggregate state (e.g. responses of rcon::global_playerlist and
+    //         rcon::global_playerlistpos should be merged)
 }
