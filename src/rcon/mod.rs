@@ -3,7 +3,7 @@ use tungstenite::{stream::MaybeTlsStream, WebSocket};
 
 #[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct RconCommand {
+struct RconCommandIssued {
     Identifier: u32,
     Message: String,
 }
@@ -24,7 +24,7 @@ pub fn send_rcon_command(
 ) -> String {
     let mut rng = rand::thread_rng();
     let command_id = rand::Rng::gen_range(&mut rng, 0..9999);
-    let rcon_command = RconCommand {
+    let rcon_command = RconCommandIssued {
         Identifier: command_id,
         Message: rcon_symbol.to_string(),
     };
@@ -68,22 +68,32 @@ pub struct PlayerInfo {
 }
 pub type PlayerList = Vec<PlayerInfo>;
 
+/// RCON command `global.playerlist`
 pub fn global_playerlist(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
-) -> Result<PlayerList, serde_json::Error> {
+) -> PlayerList {
     let rcon_symbol = "global.playerlist";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
     let response_parsed = serde_json::from_str(&response_raw);
-    return response_parsed;
+    return response_parsed.unwrap();
 }
 
+#[derive(Debug)]
+pub struct EnvTime(f64);
+
+/// RCON command `env.time`
 pub fn env_time(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: std::time::Duration,
-) {
+) -> EnvTime {
     let rcon_symbol = "env.time";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
-    println!("{}", response_raw);
-    // TODO: parse a float from response_raw -- it's something like 'env.time: "10.63853"'
+
+    // Match the float in e.g. `env.time: "10.63853"`
+    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap();
+    let captures = re.captures(&response_raw).unwrap();
+    let match_group = &captures[1];
+    let float = match_group.parse::<f64>().unwrap();
+    return EnvTime(float);
 }

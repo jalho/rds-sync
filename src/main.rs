@@ -28,11 +28,12 @@ fn main() {
 
     let rcon_command_timeout = std::time::Duration::from_millis(500);
 
-    let players = rcon::global_playerlist(&mut websocket, rcon_command_timeout).unwrap();
+    let players = rcon::global_playerlist(&mut websocket, rcon_command_timeout);
     for player in players {
         let playerlist_pretty = serde_json::to_string_pretty(&player).unwrap();
         println!("{}", playerlist_pretty);
     }
 
-    rcon::env_time(&mut websocket, rcon_command_timeout);
+    let env_time = rcon::env_time(&mut websocket, rcon_command_timeout);
+    println!("{:?}", env_time);
 }
