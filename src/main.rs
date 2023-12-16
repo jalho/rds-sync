@@ -1,11 +1,23 @@
 use std::net::TcpStream;
 use tungstenite::{stream::MaybeTlsStream, WebSocket};
 
+#[derive(clap::Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    name: String,
+
+    /// Number of times to greet
+    #[arg(short, long, default_value_t = 1)]
+    count: u8,
+}
+
 #[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct RconResponse {
     Message: String,
-    Identifier: u8,
+    Identifier: u32,
     Type: String,
     Stacktrace: String,
 }
@@ -13,7 +25,7 @@ struct RconResponse {
 #[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct RconCommand {
-    Identifier: u8,
+    Identifier: u32,
     Message: String,
 }
 
@@ -27,13 +39,15 @@ fn main() {
 
 fn send_rcon_command(
     mut socket: WebSocket<MaybeTlsStream<TcpStream>>,
-    rcon_command: &str,
+    rcon_symbol: &str,
 ) -> String {
-    let cmd = RconCommand {
-        Identifier: 1, // TODO: construct an RCON payload with a dynamic "Identifier"
-        Message: rcon_command.to_string()
+    let mut rng = rand::thread_rng();
+    let command_id = rand::Rng::gen_range(&mut rng, 0..9999);
+    let rcon_command = RconCommand {
+        Identifier: command_id,
+        Message: rcon_symbol.to_string(),
     };
-    let cmd_serialized = serde_json::to_string(&cmd).unwrap();
+    let cmd_serialized = serde_json::to_string(&rcon_command).unwrap();
     let ws_message_out = tungstenite::protocol::Message::text(cmd_serialized);
     socket.write(ws_message_out).unwrap();
     socket.flush().unwrap();
@@ -42,6 +56,6 @@ fn send_rcon_command(
 
     let ws_message_in = socket.read().unwrap();
     let text = ws_message_in.to_text().unwrap();
-    let p: RconResponse = serde_json::from_str(text).unwrap();
-    return p.Message;
+    let rcon_response: RconResponse = serde_json::from_str(text).unwrap();
+    return rcon_response.Message;
 }
