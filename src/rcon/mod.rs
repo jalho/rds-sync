@@ -131,16 +131,42 @@ pub fn global_playerlistpos(
         let captures = re.captures(&line).unwrap();
         let steam_id_raw = &captures[1];
         let player_name = &captures[2];
-        let _player_position_raw = &captures[3];
-        let _player_rotation_raw = &captures[4];
+        let player_position_raw = &captures[3];
+        let player_rotation_raw = &captures[4];
 
         player_list.push(PlayerPos {
             display_name: player_name.to_string(),
-            position: (0.0, 0.0, 0.0), // TODO: parse
-            rotation: (0.0, 0.0, 0.0), // TODO: parse
+            position: parse_float_triple(player_position_raw),
+            rotation: parse_float_triple(player_rotation_raw),
             steamd_id: steam_id_raw.to_string(),
         });
     }
 
     return player_list;
+}
+
+fn parse_float_triple(arg: &str) -> (f64, f64, f64) {
+    let parts: Vec<String> = arg.split(",").map(String::from).collect();
+
+    let mut parsed = (0.0, 0.0, 0.0);
+
+    for idx in 0..2 {
+        let part = &parts[idx];
+        let trimmed = part.trim();
+        let float = trimmed.parse::<f64>().unwrap();
+        match idx {
+            0 => {
+                parsed.0 = float;
+            }
+            1 => {
+                parsed.1 = float;
+            }
+            2 => {
+                parsed.2 = float;
+            }
+            _ => todo!(),
+        }
+    }
+
+    return parsed;
 }
