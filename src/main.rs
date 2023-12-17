@@ -103,12 +103,6 @@ fn main() {
             downstreams.remove(&dead);
         }
 
-        println!(
-            "Sync time {:?}, connected downstreams: {:?}",
-            state.sync_time_ms,
-            downstreams.len()
-        );
-
         std::thread::sleep(sync_interval);
     });
 
