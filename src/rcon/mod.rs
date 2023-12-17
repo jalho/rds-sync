@@ -5,7 +5,7 @@ use tungstenite::{stream::MaybeTlsStream, WebSocket};
 #[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct RconCommandIssued {
-    Identifier: u32,
+    Identifier: i32,
     Message: String,
 }
 
@@ -13,7 +13,7 @@ struct RconCommandIssued {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct RconResponse {
     Message: String,
-    Identifier: u32,
+    Identifier: i32,
     Type: String,
     Stacktrace: String,
 }

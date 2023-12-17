@@ -41,7 +41,7 @@ fn connect_rcon(addr: &String) -> WebSocket<MaybeTlsStream<std::net::TcpStream>>
 fn main() {
     // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
     let args = <Args as clap::Parser>::parse();
-    let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
+    let addr = format!("ws://localhost:28016/{}", args.rcon_password);
     let mut websocket_rcon_upstream = connect_rcon(&addr);
 
     let downstreams: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>> =
@@ -102,7 +102,8 @@ fn main() {
         std::thread::sleep(sync_interval);
     });
 
-    let listener = std::net::TcpListener::bind("0.0.0.0:8080").unwrap();
+    let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
+    println!("{:?}", listener);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         // TODO: add some kinda auth
