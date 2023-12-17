@@ -88,6 +88,7 @@ fn main() {
         state.tcs =
             rcon::global_listtoolcupboards(&mut websocket_rcon_upstream, &rcon_command_timeout);
 
+        // send to downstreams, prune dead connections
         let mut downstreams = downstreams_clone.lock().unwrap();
         let mut dead_downstreams: Vec<Uuid> = vec![];
         for (id, socket) in downstreams.iter_mut() {
