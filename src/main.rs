@@ -96,7 +96,7 @@ fn main() {
         }
         // log updated (dead pruned) connected downstreams count
         if dead_downstreams.len() > 0 {
-            println!("{} downstream clients connected", downstreams.len());
+            println!("Connected downstream clients count: {}", downstreams.len());
         }
 
         std::thread::sleep(sync_interval);
@@ -111,7 +111,7 @@ fn main() {
         downstreams.insert(Uuid::new_v4(), websocket);
 
         // log updated (new added) connected downstreams count
-        println!("{} downstream clients connected", downstreams.len());
+        println!("Connected downstream clients count: {}", downstreams.len());
     }
 
     // TODO: join spawned threads at interrupt?
