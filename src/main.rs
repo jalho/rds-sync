@@ -48,16 +48,6 @@ fn main() {
         Arc::new(Mutex::new(HashMap::new()));
     let downstreams_clone = downstreams.clone();
 
-    let listener = std::net::TcpListener::bind("0.0.0.0:8080").unwrap();
-    let listener_handle = std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let stream = stream.unwrap();
-            let websocket = tungstenite::accept(stream).unwrap();
-            let mut downstreams = downstreams.lock().unwrap();
-            downstreams.insert(Uuid::new_v4(), websocket);
-        }
-    });
-
     let rcon_command_timeout = Duration::from_millis(1000);
     let sync_interval = Duration::from_millis(200);
     let state = Arc::new(Mutex::new(rcon::State {
@@ -100,22 +90,30 @@ fn main() {
                 }
             }
         }
-        for dead in dead_downstreams {
+
+        for dead in &dead_downstreams {
             downstreams.remove(&dead);
+        }
+        // log updated (dead pruned) connected downstreams count
+        if dead_downstreams.len() > 0 {
+            println!("{} downstream clients connected", downstreams.len());
         }
 
         std::thread::sleep(sync_interval);
     });
 
-    // TODO: stay alive till interrupt
-    std::thread::sleep(Duration::from_secs(60));
+    let listener = std::net::TcpListener::bind("0.0.0.0:8080").unwrap();
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        // TODO: add some kinda auth
+        let websocket = tungstenite::accept(stream).unwrap();
+        let mut downstreams = downstreams.lock().unwrap();
+        downstreams.insert(Uuid::new_v4(), websocket);
+
+        // log updated (new added) connected downstreams count
+        println!("{} downstream clients connected", downstreams.len());
+    }
+
+    // TODO: join spawned threads at interrupt?
     sync.join().unwrap();
-    listener_handle.join().unwrap();
-
-    // TODO: accept client WebSocket connections
-    //       - check auth or just use firewall?
-
-    // TODO: sync local RCON state with connected clients regularly
-    //       - aggregate state (e.g. responses of rcon::global_playerlist and
-    //         rcon::global_playerlistpos should be merged)
 }
