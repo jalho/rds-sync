@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use serde::Serialize;
 use tungstenite::{stream::MaybeTlsStream, WebSocket};
 
 #[allow(non_snake_case)]
@@ -79,10 +80,10 @@ pub fn global_playerlist(
     return response_parsed.unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct EnvTime(pub f64);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct RconPosition {
     /// horizontal offset from the map's center
     pub x: f64,
@@ -92,7 +93,7 @@ pub struct RconPosition {
     pub z: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Player {
     pub address: String,
     pub connected_seconds: u32,
@@ -101,13 +102,13 @@ pub struct Player {
     pub id: String,
     pub position: RconPosition,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct ToolCupboard {
     pub id: String,
     pub position: RconPosition,
     pub auth_count: u32,
 }
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct State {
     /// List of players on the server.
     pub players: Vec<Player>,
@@ -115,8 +116,8 @@ pub struct State {
     pub tcs: Vec<ToolCupboard>,
     /// Game time as reported by RCON -- a decimal representation of 24-hour clock.
     pub game_time: EnvTime,
-    /// When the RCON state was synced.
-    pub sync_time: std::time::Duration,
+    /// When the RCON state was synced -- Unix timestamp in milliseconds.
+    pub sync_time_ms: u128,
 }
 
 pub fn merge_playerlists(playerlistpos: PlayerPosList, playerlist: PlayerList) -> Vec<Player> {
