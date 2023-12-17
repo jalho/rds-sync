@@ -20,7 +20,7 @@ struct RconResponse {
 pub fn send_rcon_command(
     socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     rcon_symbol: &str,
-    timeout: std::time::Duration,
+    timeout: &std::time::Duration,
 ) -> String {
     let mut rng = rand::thread_rng();
     let command_id = rand::Rng::gen_range(&mut rng, 0..9999);
@@ -38,7 +38,7 @@ pub fn send_rcon_command(
     loop {
         // only wait for a relevant response message till timeout
         let elapsed = timestamp_send.elapsed().unwrap();
-        if elapsed >= timeout {
+        if elapsed >= *timeout {
             todo!(); // TODO: return some kinda error
         }
 
@@ -71,7 +71,7 @@ pub type PlayerList = Vec<PlayerInfo>;
 /// RCON command `global.playerlist`
 pub fn global_playerlist(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    timeout: std::time::Duration,
+    timeout: &std::time::Duration,
 ) -> PlayerList {
     let rcon_symbol = "global.playerlist";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
@@ -80,12 +80,82 @@ pub fn global_playerlist(
 }
 
 #[derive(Debug)]
-pub struct EnvTime(f64);
+pub struct EnvTime(pub f64);
+
+#[derive(Debug, PartialEq)]
+pub struct RconPosition {
+    /// horizontal offset from the map's center
+    pub x: f64,
+    /// vertical offset from the map's center
+    pub y: f64,
+    /// altitude
+    pub z: f64,
+}
+
+#[derive(Debug)]
+pub struct Player {
+    pub address: String,
+    pub connected_seconds: u32,
+    pub display_name: String,
+    pub health: f64,
+    pub id: String,
+    pub position: RconPosition,
+}
+#[derive(Debug, PartialEq)]
+pub struct ToolCupboard {
+    pub id: String,
+    pub position: RconPosition,
+    pub auth_count: u32,
+}
+#[derive(Debug)]
+pub struct State {
+    /// List of players on the server.
+    pub players: Vec<Player>,
+    /// List of toolcupboards on the server.
+    pub tcs: Vec<ToolCupboard>,
+    /// Game time as reported by RCON -- a decimal representation of 24-hour clock.
+    pub game_time: EnvTime,
+    /// When the RCON state was synced.
+    pub sync_time: std::time::Duration,
+}
+
+pub fn merge_playerlists(playerlistpos: PlayerPosList, playerlist: PlayerList) -> Vec<Player> {
+    let mut players = vec![];
+
+    let mut iterable_playerlistpos = playerlistpos.iter();
+    for player in playerlist {
+        let player_position: RconPosition;
+        let player_positioned = iterable_playerlistpos.find(|x| x.steamd_id == player.SteamID);
+        match player_positioned {
+            Some(player_positioned) => {
+                player_position = RconPosition {
+                    x: player_positioned.position.0,
+                    z: player_positioned.position.1,
+                    y: player_positioned.position.2,
+                }
+            }
+            None => {
+                continue; // TODO: log a warning -- no position information found for some player
+            }
+        }
+        let p = Player {
+            address: player.Address,
+            connected_seconds: player.ConnectedSeconds,
+            display_name: player.DisplayName,
+            health: player.Health,
+            id: player.SteamID,
+            position: player_position,
+        };
+        players.push(p);
+    }
+
+    return players;
+}
 
 /// RCON command `env.time`
 pub fn env_time(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    timeout: std::time::Duration,
+    timeout: &std::time::Duration,
 ) -> EnvTime {
     let rcon_symbol = "env.time";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
@@ -109,7 +179,7 @@ pub type PlayerPosList = Vec<PlayerPos>;
 /// RCON command `global.playerlistpos`
 pub fn global_playerlistpos(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    timeout: std::time::Duration,
+    timeout: &std::time::Duration,
 ) -> PlayerPosList {
     let rcon_symbol = "global.playerlistpos";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
@@ -132,12 +202,12 @@ pub fn global_playerlistpos(
 /// RCON command `global.listtoolcupboards`
 pub fn global_listtoolcupboards(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-    timeout: std::time::Duration,
-) -> ToolcupboardPosList {
+    timeout: &std::time::Duration,
+) -> Vec<ToolCupboard> {
     let rcon_symbol = "global.listtoolcupboards";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
 
-    let mut tc_list: ToolcupboardPosList = Vec::new();
+    let mut tc_list: Vec<ToolCupboard> = Vec::new();
     let mut line_number = 0;
     for line in response_raw.lines() {
         line_number = line_number + 1;
@@ -165,23 +235,20 @@ fn parse_playerlistpos(arg: &str) -> PlayerPos {
     };
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
-pub struct ToolcupboardPos {
-    entity_id: String,
-    position: (f64, f64, f64),
-    auth_count: u32,
-}
-type ToolcupboardPosList = Vec<ToolcupboardPos>;
-
-fn parse_listtoolcupboards(arg: &str) -> ToolcupboardPos {
+fn parse_listtoolcupboards(arg: &str) -> ToolCupboard {
     let re = regex::Regex::new(r#"(\d{6})\s+\((.*)\)\s+(\d+)"#).unwrap(); // TODO: get regex as arg?
     let captures = re.captures(arg).unwrap();
     let entity_id_raw = captures[1].to_string();
     let position_raw = captures[2].to_string();
     let auth_count_raw = captures[3].to_string();
-    return ToolcupboardPos {
-        entity_id: entity_id_raw.to_string(),
-        position: parse_float_triple(&position_raw),
+    let pos = parse_float_triple(&position_raw);
+    return ToolCupboard {
+        id: entity_id_raw.to_string(),
+        position: RconPosition {
+            x: pos.0,
+            z: pos.1,
+            y: pos.2,
+        },
         auth_count: auth_count_raw.parse::<u32>().unwrap(),
     };
 }
@@ -247,10 +314,14 @@ mod tests {
     fn test_parse_listtoolcupboards() {
         assert_eq!(
             parse_listtoolcupboards("754298   (278.51, 37.18, 83.82)     0",),
-            ToolcupboardPos {
+            ToolCupboard {
                 auth_count: 0,
-                entity_id: "754298".to_string(),
-                position: (278.51, 37.18, 83.82),
+                id: "754298".to_string(),
+                position: RconPosition {
+                    x: 278.51,
+                    z: 37.18,
+                    y: 83.82
+                },
             }
         );
     }
