@@ -12,8 +12,8 @@ mod rcon;
 
 #[derive(clap::Parser, Debug)]
 struct Args {
-    #[arg(long)]
-    rcon_password: String,
+    #[arg(long, short)]
+    rcon_connection_string: String,
 }
 
 fn get_current_time_utc() -> u128 {
@@ -23,15 +23,20 @@ fn get_current_time_utc() -> u128 {
         .as_millis();
 }
 
-fn connect_rcon(addr: &String) -> WebSocket<MaybeTlsStream<std::net::TcpStream>> {
+/// RCON connection string is e.g. `ws://192.168.0.104:28016/Your_Rcon_Password`
+fn connect_rcon(rcon_connection_string: &String) -> WebSocket<MaybeTlsStream<std::net::TcpStream>> {
     let websocket: WebSocket<MaybeTlsStream<std::net::TcpStream>>;
-    match tungstenite::connect(addr) {
+    match tungstenite::connect(rcon_connection_string) {
         Ok((ws, _)) => {
             websocket = ws;
+            println!("Connected to RCON upstream");
         }
         Err(_) => {
             // TODO: don't print RCON password to stdout
-            eprintln!("Failed to connect a WebSocket to '{}'", &addr);
+            eprintln!(
+                "Failed to connect a WebSocket to '{}'",
+                &rcon_connection_string
+            );
             std::process::exit(1);
         }
     };
@@ -95,9 +100,12 @@ fn sync_periodic(mut api: RconSyncApi) {
 }
 
 /// Accept downstream WebSocket connections.
-fn accept_downstreams(connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>>) {
-    let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
-    println!("{:?}", listener);
+fn accept_downstreams(
+    connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>>,
+    listen_addr: &str,
+) {
+    let listener = std::net::TcpListener::bind(listen_addr).unwrap();
+    println!("Accepting downstream WebSocket connections at {}", listen_addr);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         // TODO: add some kinda auth
@@ -113,8 +121,7 @@ fn accept_downstreams(connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpSt
 fn main() {
     // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
     let args = <Args as clap::Parser>::parse();
-    let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
-    let upstream_socket = connect_rcon(&addr);
+    let upstream_socket = connect_rcon(&args.rcon_connection_string);
 
     let connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -138,7 +145,7 @@ fn main() {
     };
 
     let syncer = std::thread::spawn(|| sync_periodic(api));
-    let acceptor = std::thread::spawn(|| accept_downstreams(connected_clients));
+    let acceptor = std::thread::spawn(|| accept_downstreams(connected_clients, "0.0.0.0:1234"));
 
     // TODO: join spawned threads at interrupt?
     syncer.join().unwrap();
