@@ -47,7 +47,7 @@ struct RconSyncApi {
 }
 
 /// Sync remote RCON upstream state with local state with a regular interval.
-fn state_sync_periodic(mut api: RconSyncApi) {
+fn sync_periodic(mut api: RconSyncApi) {
     loop {
         let mut state = api.state.lock().unwrap();
 
@@ -94,6 +94,22 @@ fn state_sync_periodic(mut api: RconSyncApi) {
     }
 }
 
+/// Accept downstream WebSocket connections.
+fn accept_downstreams(connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>>) {
+    let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
+    println!("{:?}", listener);
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        // TODO: add some kinda auth
+        let websocket = tungstenite::accept(stream).unwrap();
+        let mut downstreams = connected_clients.lock().unwrap();
+        downstreams.insert(Uuid::new_v4(), websocket);
+
+        // log updated (new added) connected downstreams count
+        println!("Connected downstream clients count: {}", downstreams.len());
+    }
+}
+
 fn main() {
     // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
     let args = <Args as clap::Parser>::parse();
@@ -113,7 +129,6 @@ fn main() {
         sync_time_ms: 0,
     }));
     let state = state.clone();
-
     let api = RconSyncApi {
         command_timeout,
         state,
@@ -121,21 +136,11 @@ fn main() {
         sync_interval,
         upstream_socket,
     };
-    let sync = std::thread::spawn(move || state_sync_periodic(api));
 
-    let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
-    println!("{:?}", listener);
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        // TODO: add some kinda auth
-        let websocket = tungstenite::accept(stream).unwrap();
-        let mut downstreams = connected_clients.lock().unwrap();
-        downstreams.insert(Uuid::new_v4(), websocket);
-
-        // log updated (new added) connected downstreams count
-        println!("Connected downstream clients count: {}", downstreams.len());
-    }
+    let syncer = std::thread::spawn(|| sync_periodic(api));
+    let acceptor = std::thread::spawn(|| accept_downstreams(connected_clients));
 
     // TODO: join spawned threads at interrupt?
-    sync.join().unwrap();
+    syncer.join().unwrap();
+    acceptor.join().unwrap();
 }
