@@ -38,28 +38,16 @@ fn connect_rcon(addr: &String) -> WebSocket<MaybeTlsStream<std::net::TcpStream>>
     return websocket;
 }
 
-fn main() {
-    // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
-    let args = <Args as clap::Parser>::parse();
-    let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
-    let mut websocket_rcon_upstream = connect_rcon(&addr);
-
-    let downstreams: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let downstreams_clone = downstreams.clone();
-
-    let rcon_command_timeout = Duration::from_millis(1000);
-    let sync_interval = Duration::from_millis(200);
-    let state = Arc::new(Mutex::new(rcon::State {
-        players: vec![],
-        tcs: vec![],
-        game_time: rcon::EnvTime(0.0),
-        sync_time_ms: 0,
-    }));
-
-    let arc_state_sync_upstream = state.clone();
-    let sync = std::thread::spawn(move || loop {
-        let mut state = arc_state_sync_upstream.lock().unwrap();
+/// Sync remote RCON upstream state with local state with a regular interval.
+fn state_sync_periodic(
+    rcon_command_timeout: Duration,
+    state: Arc<Mutex<rcon::State>>,
+    subscribed_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>>,
+    sync_interval: Duration,
+    mut websocket_rcon_upstream: WebSocket<MaybeTlsStream<TcpStream>>,
+) {
+    loop {
+        let mut state = state.lock().unwrap();
 
         state.sync_time_ms = get_current_time_utc();
 
@@ -79,7 +67,7 @@ fn main() {
             rcon::global_listtoolcupboards(&mut websocket_rcon_upstream, &rcon_command_timeout);
 
         // send to downstreams, prune dead connections
-        let mut downstreams = downstreams_clone.lock().unwrap();
+        let mut downstreams = subscribed_clients.lock().unwrap();
         let mut dead_downstreams: Vec<Uuid> = vec![];
         for (id, socket) in downstreams.iter_mut() {
             let serialized = serde_json::to_string(&*state).unwrap();
@@ -100,6 +88,37 @@ fn main() {
         }
 
         std::thread::sleep(sync_interval);
+    }
+}
+
+fn main() {
+    // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
+    let args = <Args as clap::Parser>::parse();
+    let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
+    let websocket_rcon_upstream = connect_rcon(&addr);
+
+    let connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let subscribed_clients = connected_clients.clone();
+
+    let rcon_command_timeout = Duration::from_millis(1000);
+    let sync_interval = Duration::from_millis(200);
+    let state = Arc::new(Mutex::new(rcon::State {
+        players: vec![],
+        tcs: vec![],
+        game_time: rcon::EnvTime(0.0),
+        sync_time_ms: 0,
+    }));
+    let state = state.clone();
+
+    let sync = std::thread::spawn(move || {
+        state_sync_periodic(
+            rcon_command_timeout,
+            state,
+            subscribed_clients,
+            sync_interval,
+            websocket_rcon_upstream,
+        )
     });
 
     let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
@@ -108,7 +127,7 @@ fn main() {
         let stream = stream.unwrap();
         // TODO: add some kinda auth
         let websocket = tungstenite::accept(stream).unwrap();
-        let mut downstreams = downstreams.lock().unwrap();
+        let mut downstreams = connected_clients.lock().unwrap();
         downstreams.insert(Uuid::new_v4(), websocket);
 
         // log updated (new added) connected downstreams count
