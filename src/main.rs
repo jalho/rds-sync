@@ -38,56 +38,59 @@ fn connect_rcon(addr: &String) -> WebSocket<MaybeTlsStream<std::net::TcpStream>>
     return websocket;
 }
 
-/// Sync remote RCON upstream state with local state with a regular interval.
-fn state_sync_periodic(
-    rcon_command_timeout: Duration,
+struct RconSyncApi {
+    command_timeout: Duration,
     state: Arc<Mutex<rcon::State>>,
     subscribed_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>>,
     sync_interval: Duration,
-    mut websocket_rcon_upstream: WebSocket<MaybeTlsStream<TcpStream>>,
-) {
+    upstream_socket: WebSocket<MaybeTlsStream<TcpStream>>,
+}
+
+/// Sync remote RCON upstream state with local state with a regular interval.
+fn state_sync_periodic(mut api: RconSyncApi) {
     loop {
-        let mut state = state.lock().unwrap();
+        let mut state = api.state.lock().unwrap();
 
         state.sync_time_ms = get_current_time_utc();
 
         // sync game time
-        state.game_time = rcon::env_time(&mut websocket_rcon_upstream, &rcon_command_timeout);
+        state.game_time = rcon::env_time(&mut api.upstream_socket, &api.command_timeout);
 
         // sync players
-        let playerlist =
-            rcon::global_playerlist(&mut websocket_rcon_upstream, &rcon_command_timeout);
+        let playerlist = rcon::global_playerlist(&mut api.upstream_socket, &api.command_timeout);
         let playerlistpos =
-            rcon::global_playerlistpos(&mut websocket_rcon_upstream, &rcon_command_timeout);
+            rcon::global_playerlistpos(&mut api.upstream_socket, &api.command_timeout);
         let players = rcon::merge_playerlists(playerlistpos, playerlist);
         state.players = players;
 
         // sync TCs
-        state.tcs =
-            rcon::global_listtoolcupboards(&mut websocket_rcon_upstream, &rcon_command_timeout);
+        state.tcs = rcon::global_listtoolcupboards(&mut api.upstream_socket, &api.command_timeout);
 
-        // send to downstreams, prune dead connections
-        let mut downstreams = subscribed_clients.lock().unwrap();
-        let mut dead_downstreams: Vec<Uuid> = vec![];
-        for (id, socket) in downstreams.iter_mut() {
-            let serialized = serde_json::to_string(&*state).unwrap();
-            match socket.send(serialized.into()) {
+        // send to downstreams
+        let mut subscribed_clients = api.subscribed_clients.lock().unwrap();
+        let mut dead_clients: Vec<Uuid> = vec![];
+        for (id, socket) in subscribed_clients.iter_mut() {
+            let state_serialized = serde_json::to_string(&*state).unwrap();
+            match socket.send(state_serialized.into()) {
                 Ok(_) => {}
                 Err(_) => {
-                    dead_downstreams.push(*id);
+                    dead_clients.push(*id);
                 }
             }
         }
 
-        for dead in &dead_downstreams {
-            downstreams.remove(&dead);
+        // prune dead connections
+        for dead in &dead_clients {
+            subscribed_clients.remove(&dead);
         }
-        // log updated (dead pruned) connected downstreams count
-        if dead_downstreams.len() > 0 {
-            println!("Connected downstream clients count: {}", downstreams.len());
+        if dead_clients.len() > 0 {
+            println!(
+                "Connected downstream clients count: {}",
+                subscribed_clients.len()
+            );
         }
 
-        std::thread::sleep(sync_interval);
+        std::thread::sleep(api.sync_interval);
     }
 }
 
@@ -95,13 +98,13 @@ fn main() {
     // TODO: get fs path to some *.sh config file as arg and attempt to read RCON password from there
     let args = <Args as clap::Parser>::parse();
     let addr = format!("ws://rds-remote:28016/{}", args.rcon_password);
-    let websocket_rcon_upstream = connect_rcon(&addr);
+    let upstream_socket = connect_rcon(&addr);
 
     let connected_clients: Arc<Mutex<HashMap<Uuid, WebSocket<TcpStream>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let subscribed_clients = connected_clients.clone();
 
-    let rcon_command_timeout = Duration::from_millis(1000);
+    let command_timeout = Duration::from_millis(1000);
     let sync_interval = Duration::from_millis(200);
     let state = Arc::new(Mutex::new(rcon::State {
         players: vec![],
@@ -111,15 +114,14 @@ fn main() {
     }));
     let state = state.clone();
 
-    let sync = std::thread::spawn(move || {
-        state_sync_periodic(
-            rcon_command_timeout,
-            state,
-            subscribed_clients,
-            sync_interval,
-            websocket_rcon_upstream,
-        )
-    });
+    let api = RconSyncApi {
+        command_timeout,
+        state,
+        subscribed_clients,
+        sync_interval,
+        upstream_socket,
+    };
+    let sync = std::thread::spawn(move || state_sync_periodic(api));
 
     let listener = std::net::TcpListener::bind("0.0.0.0:1234").unwrap();
     println!("{:?}", listener);
