@@ -1,0 +1,7 @@
+GET / HTTP/1.1
+Host: 127.0.0.1:8080
+Sec-WebSocket-Version: 13
+Sec-WebSocket-Key: 0000000000000000000000==
+Connection: keepalive, upgrade
+Upgrade: websocket
+
