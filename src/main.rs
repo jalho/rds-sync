@@ -32,7 +32,15 @@ fn main() {
         Err(_) => todo!(),
     }
 
-    let _ = websocket.write("foo".into());
-    let _ = websocket.flush();
+    match websocket.write("foo".into()) {
+        Ok(_) => {}
+        Err(_) => todo!(),
+    }
+
+    match websocket.flush() {
+        Ok(_) => {}
+        Err(_) => todo!(),
+    }
+
     sleep(Duration::from_millis(2000));
 }
