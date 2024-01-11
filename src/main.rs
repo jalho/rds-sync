@@ -22,8 +22,7 @@ fn handle(mut websocket: WebSocket<TcpStream>) {
 
 fn main() {
     let tcp_listener: TcpListener;
-    let tcp_stream: TcpStream;
-    let websocket: WebSocket<TcpStream>;
+    let mut handles = Vec::new();
 
     match TcpListener::bind("127.0.0.1:8080") {
         Ok(n) => {
@@ -32,24 +31,32 @@ fn main() {
         Err(_) => todo!(),
     }
 
-    match tcp_listener.accept() {
-        Ok((n, _)) => {
-            tcp_stream = n;
+    for _ in 1..4 {
+        let tcp_stream: TcpStream;
+        let websocket: WebSocket<TcpStream>;
+
+        match tcp_listener.accept() {
+            Ok((n, _)) => {
+                tcp_stream = n;
+            }
+            Err(_) => todo!(),
         }
-        Err(_) => todo!(),
+
+        match accept(tcp_stream) {
+            Ok(n) => {
+                websocket = n;
+            }
+            Err(_) => todo!(),
+        }
+
+        let h = spawn(|| handle(websocket));
+        handles.push(h);
     }
 
-    match accept(tcp_stream) {
-        Ok(n) => {
-            websocket = n;
+    for h in handles {
+        match h.join() {
+            Ok(_) => {}
+            Err(_) => todo!(),
         }
-        Err(_) => todo!(),
-    }
-
-    let h = spawn(|| handle(websocket));
-
-    match h.join() {
-        Ok(_) => {}
-        Err(_) => todo!(),
     }
 }
