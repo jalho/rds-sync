@@ -1,6 +1,5 @@
 use std::{
     net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
     thread::{sleep, spawn},
     time::Duration,
 };
@@ -23,12 +22,6 @@ fn handle(mut websocket: WebSocket<TcpStream>) {
 
 fn main() {
     let tcp_listener: TcpListener;
-
-    /* TODO: Do I even need handles for connection handler threads? Maybe not
-    because they need not be join()'d on because they're all spawned from one
-    super thread that in turn is join()'d on. In other words, keeping parent
-    thread alive should be enough to keep child threads alive. */
-    let connection_handler_handles = Arc::new(Mutex::new(Vec::new()));
 
     match TcpListener::bind("127.0.0.1:8080") {
         Ok(n) => {
@@ -55,13 +48,7 @@ fn main() {
             Err(_) => todo!(),
         }
 
-        match connection_handler_handles.lock() {
-            Ok(mut n) => {
-                let h = spawn(|| handle(websocket));
-                n.push(h);
-            }
-            Err(_) => todo!(),
-        }
+        spawn(|| handle(websocket));
     });
 
     match main_listener_handle.join() {
