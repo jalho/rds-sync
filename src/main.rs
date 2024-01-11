@@ -1,24 +1,38 @@
-use std::{net::TcpListener, thread::sleep, time::Duration};
+use std::{
+    net::{TcpListener, TcpStream},
+    thread::sleep,
+    time::Duration,
+};
 
-use tungstenite::accept;
+use tungstenite::{accept, WebSocket};
 
 fn main() {
+    let tcp_listener: TcpListener;
+    let tcp_stream: TcpStream;
+    let mut websocket: WebSocket<TcpStream>;
+
     match TcpListener::bind("127.0.0.1:8080") {
-        Ok(tcp_listener) => match tcp_listener.accept() {
-            Ok((tcp_stream, _)) => match accept(tcp_stream) {
-                Ok(mut websocket) => match websocket.write("foo".into()) {
-                    Ok(_) => match websocket.flush() {
-                        Ok(_) => {
-                            sleep(Duration::from_millis(2000));
-                        }
-                        Err(_) => todo!(),
-                    },
-                    Err(_) => todo!(),
-                },
-                Err(_) => todo!(),
-            },
-            Err(_) => todo!(),
-        },
+        Ok(n) => {
+            tcp_listener = n;
+        }
         Err(_) => todo!(),
     }
+
+    match tcp_listener.accept() {
+        Ok((n, _)) => {
+            tcp_stream = n;
+        }
+        Err(_) => todo!(),
+    }
+
+    match accept(tcp_stream) {
+        Ok(n) => {
+            websocket = n;
+        }
+        Err(_) => todo!(),
+    }
+
+    let _ = websocket.write("foo".into());
+    let _ = websocket.flush();
+    sleep(Duration::from_millis(2000));
 }
