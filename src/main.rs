@@ -2,20 +2,25 @@ use std::{
     net::{TcpListener, TcpStream},
     sync::{mpsc::channel, Arc, Mutex},
     thread::{sleep, spawn},
-    time::{Duration, Instant},
+    time::{Duration, SystemTime},
 };
 
 use tungstenite::{accept, connect, stream::MaybeTlsStream, Message, WebSocket};
 
 mod rcon;
 
-fn handle(websocket: WebSocket<TcpStream>) {
+fn handle(
+    downstream: WebSocket<TcpStream>,
+    upstream_write: Arc<Mutex<WebSocket<MaybeTlsStream<TcpStream>>>>,
+    state_read: Arc<Mutex<rcon::State>>,
+) {
     let (sender, receiver) = channel::<Message>();
-    let ws_write = Arc::new(Mutex::new(websocket));
-    let ws_read = Arc::clone(&ws_write);
+    let downstream_write = Arc::new(Mutex::new(downstream));
+    let downstream_read = Arc::clone(&downstream_write);
 
+    // get RCON commands from the downstream
     spawn(move || loop {
-        match ws_read.try_lock() {
+        match downstream_read.try_lock() {
             // lock acquired here
             Ok(mut ws) => match ws.read() {
                 Ok(msg) => match sender.send(msg) {
@@ -26,48 +31,53 @@ fn handle(websocket: WebSocket<TcpStream>) {
             },
             Err(_) => {}
         } // lock released here
-
-        /* Wait some time before acquiring the lock again so other work (e.g.
-        sending RCON sync payloads) can continue using the WebSocket. */
-        sleep(Duration::from_millis(1));
     });
 
-    // TODO: construct RCON sync payload and send to the downstream
-    let mut last = Instant::now();
-    for i in 0..64 {
+    // read incoming RCON commands from the downstream and send state updates to the downstream
+    loop {
         match receiver.try_recv() {
             Ok(received) => {
-                println!("Got RCON command from downstream: {}", received);
+                // TODO: use upstream_write to pass downstream received RCON commands to the upstream
             }
             Err(_) => {}
         }
+        match state_read.try_lock() {
+            // state read lock acquired here
+            Ok(state) => {
+                match downstream_write.try_lock() {
+                    // downstream socket lock acquired here
+                    Ok(mut ws) => {
+                        let state_serialized: String;
+                        match serde_json::to_string(&*state) {
+                            Ok(serialized) => {
+                                state_serialized = serialized;
+                            }
+                            Err(_) => todo!(),
+                        }
 
-        match ws_write.try_lock() {
-            Ok(mut ws) => {
-                let now = Instant::now();
-                match ws.write(
-                    format!(
-                        "RCON sync payload #{} -- elapsed: {:?}\n",
-                        i,
-                        last.elapsed()
-                    )
-                    .into(),
-                ) {
-                    Ok(_) => {}
+                        match ws.write(state_serialized.into()) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+
+                        match ws.flush() {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                    }
                     Err(_) => {}
                 }
-
-                match ws.flush() {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
-
-                last = now;
-            }
+            } // downstream socket lock released here
             Err(_) => {}
-        }
-        sleep(Duration::from_millis(1000));
+        } // state read lock released here
     }
+}
+
+fn get_current_time_utc() -> u128 {
+    return SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
 }
 
 fn main() {
@@ -81,7 +91,10 @@ fn main() {
     clients handling threads' RCON command passing. */
     let rcon_upstream_cmd: Arc<Mutex<WebSocket<MaybeTlsStream<TcpStream>>>>;
 
-    let rcon_state_write = Arc::new(Mutex::new(rcon::State {
+    let rcon_command_timeout = Duration::from_millis(1000);
+
+    let rcon_state_write: Arc<Mutex<rcon::State>>;
+    rcon_state_write = Arc::new(Mutex::new(rcon::State {
         players: vec![],
         tcs: vec![],
         game_time: rcon::EnvTime(0.0),
@@ -104,25 +117,41 @@ fn main() {
         Err(_) => todo!(),
     }
 
+    // get RCON state from the upstream and update local state
     let rcon_upstream_sync_handle = spawn(move || loop {
         match rcon_state_write.try_lock() {
-            // lock acquired here
-            Ok(state) => {
-                // TODO: sync upstream with local state using rcon_upstream_sync
-                println!("Syncing upstream RCON state!");
+            // state write lock acquired here
+            Ok(mut local_state_to_sync) => {
+                match rcon_upstream_sync.try_lock() {
+                    // upstream socket lock acquired here
+                    Ok(mut socket) => {
+                        local_state_to_sync.sync_time_ms = get_current_time_utc();
+
+                        // sync game time
+                        local_state_to_sync.game_time = rcon::env_time(&mut socket, &rcon_command_timeout);
+
+                        // sync players
+                        let playerlist =
+                            rcon::global_playerlist(&mut socket, &rcon_command_timeout);
+                        let playerlistpos =
+                            rcon::global_playerlistpos(&mut socket, &rcon_command_timeout);
+                        let players = rcon::merge_playerlists(playerlistpos, playerlist);
+                        local_state_to_sync.players = players;
+
+                        // sync TCs
+                        local_state_to_sync.tcs =
+                            rcon::global_listtoolcupboards(&mut socket, &rcon_command_timeout);
+                    }
+                    Err(_) => todo!(),
+                } // upstream socket lock released here
             }
             Err(_) => {}
-        } // lock released here
-
-        /* Wait some time before acquiring the lock again so other work can
-        continue using the RCON state (i.e. reading it, sending updates to
-        downstreams). */
-        sleep(Duration::from_millis(1));
+        } // state write lock released here
     });
 
     let main_listener_handle = spawn(move || loop {
         let tcp_stream: TcpStream;
-        let websocket: WebSocket<TcpStream>;
+        let downstream: WebSocket<TcpStream>;
 
         match tcp_listener.accept() {
             Ok((n, _)) => {
@@ -147,10 +176,10 @@ fn main() {
         sleep(Duration::from_micros(1000));
         match accept(tcp_stream) {
             Ok(n) => {
-                websocket = n;
-                // TODO: use rcon_upstream_cmd to pass downstream sent commands to RCON upstream
-                // TODO: use rcon_state_read to send RCON state to downstream clients
-                spawn(|| handle(websocket));
+                downstream = n;
+                let upstream_write = Arc::clone(&rcon_upstream_cmd);
+                let state_read = Arc::clone(&rcon_state_read);
+                spawn(move || handle(downstream, upstream_write, state_read));
             }
             /* Error here occurs e.g. when the handshake was only partially
             received. */
