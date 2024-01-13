@@ -43,12 +43,13 @@ fn handle(
         }
         match state_read.try_lock() {
             // state read lock acquired here
-            Ok(state) => {
+            Ok(local_state_to_send) => {
+                // TODO: fix downstream socket access -- downstream_write here rarely gets the lock
                 match downstream_write.try_lock() {
                     // downstream socket lock acquired here
                     Ok(mut ws) => {
                         let state_serialized: String;
-                        match serde_json::to_string(&*state) {
+                        match serde_json::to_string(&*local_state_to_send) {
                             Ok(serialized) => {
                                 state_serialized = serialized;
                             }
