@@ -5,6 +5,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use rcon::send_rcon_command;
 use tungstenite::{accept, connect, stream::MaybeTlsStream, Message, WebSocket};
 
 mod rcon;
@@ -13,6 +14,7 @@ fn handle(
     downstream: WebSocket<TcpStream>,
     upstream_write: Arc<Mutex<WebSocket<MaybeTlsStream<TcpStream>>>>,
     state_read: Arc<Mutex<rcon::State>>,
+    rcon_command_timeout: Duration,
 ) {
     let (sender, receiver) = channel::<Message>();
     let downstream_write = Arc::new(Mutex::new(downstream));
@@ -31,21 +33,36 @@ fn handle(
             },
             Err(_) => {}
         } // lock released here
+
+        /* Sleep a while before acquiring the downstream socket lock again to
+        allow another mechanism to use the socket. The other mechanism is the
+        one that sends RCON state updates to the downstream. */
+        sleep(Duration::from_millis(200));
     });
 
     // read incoming RCON commands from the downstream and send state updates to the downstream
     loop {
         match receiver.try_recv() {
-            Ok(received) => {
-                // TODO: use upstream_write to pass downstream received RCON commands to the upstream
-            }
+            Ok(received) => match received {
+                Message::Text(message) => match upstream_write.lock() {
+                    Ok(mut sock) => {
+                        println!("Passing RCON command to the upstream: '{}'", message);
+                        send_rcon_command(&mut sock, &message, &rcon_command_timeout);
+                    }
+                    Err(_) => todo!(),
+                },
+                Message::Binary(_) => todo!(),
+                Message::Ping(_) => todo!(),
+                Message::Pong(_) => todo!(),
+                Message::Close(_) => todo!(),
+                Message::Frame(_) => todo!(),
+            },
             Err(_) => {}
         }
-        match state_read.try_lock() {
+        match state_read.lock() {
             // state read lock acquired here
             Ok(local_state_to_send) => {
-                // TODO: fix downstream socket access -- downstream_write here rarely gets the lock
-                match downstream_write.try_lock() {
+                match downstream_write.lock() {
                     // downstream socket lock acquired here
                     Ok(mut ws) => {
                         let state_serialized: String;
@@ -71,6 +88,12 @@ fn handle(
             } // downstream socket lock released here
             Err(_) => {}
         } // state read lock released here
+
+        /* Sleep a while before acquiring the locks for upstream and downstream
+        sockets and local state again to allow another mechanism to use them.
+        The other mechanism is the one syncing upstream RCON state with local
+        state. */
+        sleep(Duration::from_millis(200));
     }
 }
 
@@ -120,16 +143,17 @@ fn main() {
 
     // get RCON state from the upstream and update local state
     let rcon_upstream_sync_handle = spawn(move || loop {
-        match rcon_state_write.try_lock() {
+        match rcon_state_write.lock() {
             // state write lock acquired here
             Ok(mut local_state_to_sync) => {
-                match rcon_upstream_sync.try_lock() {
+                match rcon_upstream_sync.lock() {
                     // upstream socket lock acquired here
                     Ok(mut socket) => {
                         local_state_to_sync.sync_time_ms = get_current_time_utc();
 
                         // sync game time
-                        local_state_to_sync.game_time = rcon::env_time(&mut socket, &rcon_command_timeout);
+                        local_state_to_sync.game_time =
+                            rcon::env_time(&mut socket, &rcon_command_timeout);
 
                         // sync players
                         let playerlist =
@@ -148,6 +172,12 @@ fn main() {
             }
             Err(_) => {}
         } // state write lock released here
+
+        /* Sleep a while before acquiring the upstream sync socket and local
+        state locks again to allow other mechanisms to use them. The other
+        mechanisms are those passing on RCON commands from downstream to
+        upstream and sending state updates to downstreams. */
+        sleep(Duration::from_millis(200));
     });
 
     let main_listener_handle = spawn(move || loop {
@@ -180,7 +210,7 @@ fn main() {
                 downstream = n;
                 let upstream_write = Arc::clone(&rcon_upstream_cmd);
                 let state_read = Arc::clone(&rcon_state_read);
-                spawn(move || handle(downstream, upstream_write, state_read));
+                spawn(move || handle(downstream, upstream_write, state_read, rcon_command_timeout));
             }
             /* Error here occurs e.g. when the handshake was only partially
             received. */
