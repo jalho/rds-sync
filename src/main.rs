@@ -126,7 +126,7 @@ fn main() {
     }));
     let rcon_state_read = Arc::clone(&rcon_state_write);
 
-    match connect("ws://192.168.0.104:28016/Your_Rcon_Password") {
+    match connect("ws://127.0.0.1:28016/Your_Rcon_Password") {
         Ok((ws, _)) => {
             rcon_upstream_sync = Arc::new(Mutex::new(ws));
             rcon_upstream_cmd = Arc::clone(&rcon_upstream_sync);
