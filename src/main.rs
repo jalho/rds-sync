@@ -7,9 +7,9 @@ fn main() {
     let _tcp_listener: TcpListener;
     // let _state: rcon::State;
     let _ws: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
-    let _config: config::Config;
+    let config: config::Config;
 
-    _config = config::Config::get();
+    config = config::Config::get();
 
     // _state = rcon::State {
     //     players: vec![],
@@ -17,7 +17,7 @@ fn main() {
     //     game_time: rcon::EnvTime(0.0),
     //     sync_time_ms: 0,
     // };
-    match tungstenite::connect("ws://127.0.0.1:28016/Your_Rcon_Password") {
+    match tungstenite::connect(config.rcon_upstream_ws_connection_string) {
         Ok((ws, _)) => {
             println!("Connected to RCON upstream WebSocket endpoint!");
             _ws = ws;

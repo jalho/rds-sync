@@ -1,7 +1,5 @@
 use clap::Parser;
 
-pub struct Config {}
-
 #[derive(Parser)]
 struct Cli {
     #[arg(
@@ -12,12 +10,15 @@ struct Cli {
     rcon_upstream_ws_connection_string: String,
 }
 
+pub struct Config {
+    pub rcon_upstream_ws_connection_string: String,
+}
 impl Config {
     pub fn get() -> Self {
         let cli = Cli::parse();
 
-        println!("RCON addr: {}", cli.rcon_upstream_ws_connection_string);
-
-        return Self {};
+        return Self {
+            rcon_upstream_ws_connection_string: cli.rcon_upstream_ws_connection_string,
+        };
     }
 }
