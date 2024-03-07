@@ -17,7 +17,7 @@ fn main() {
     //     game_time: rcon::EnvTime(0.0),
     //     sync_time_ms: 0,
     // };
-    match tungstenite::connect(config.rcon_upstream_ws_connection_string) {
+    match tungstenite::connect(config.rcon_connection) {
         Ok((ws, _)) => {
             println!("Connected to RCON upstream WebSocket endpoint!");
             _ws = ws;
