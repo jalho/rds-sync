@@ -1,24 +1,16 @@
-use std::{
-    env,
-    net::{TcpListener, TcpStream},
-    time::Duration,
-};
+use std::net::{TcpListener, TcpStream};
 
 // mod rcon;
+mod config;
 
 fn main() {
     let _tcp_listener: TcpListener;
     // let _state: rcon::State;
-    let _rcon_command_timeout: Duration;
     let _ws: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
+    let _config: config::Config;
 
-    let args: Vec<String> = env::args().collect();
-    println!("Program name: {}", args[0]);
-    for arg in &args[1..] {
-        println!("Argument: {}", arg);
-    }
+    _config = config::Config::get();
 
-    _rcon_command_timeout = Duration::from_millis(1000);
     // _state = rcon::State {
     //     players: vec![],
     //     tcs: vec![],
