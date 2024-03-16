@@ -65,13 +65,21 @@ pub fn sync_downstream(mut ws_downstream: WebSocket<TcpStream>, receiver: &Recei
                         Ok(_) => {
                             println!("Sent a state update to downstream!");
                         }
-                        Err(_) => todo!(),
+                        Err(err) => {
+                            eprintln!("{}", err);
+                        },
                     },
-                    Err(_) => todo!(),
+                    Err(err) => {
+                        eprintln!("{}", err);
+                    },
                 },
-                Err(_) => todo!(),
+                Err(err) => {
+                    eprintln!("{}", err);
+                },
             },
-            Err(_) => todo!(),
+            Err(err) => {
+                eprintln!("{}", err);
+            },
         }
     }
     println!("Dropping downstream connection!");
