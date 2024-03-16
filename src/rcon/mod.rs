@@ -162,7 +162,7 @@ pub fn env_time(
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
 
     // Match the float in e.g. `env.time: "10.63853"`
-    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap(); // TODO: get Regex as arg?
+    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap();
     let captures = re.captures(&response_raw).unwrap();
     let match_group = &captures[1];
     let float = match_group.parse::<f64>().unwrap();
@@ -224,7 +224,7 @@ pub fn global_listtoolcupboards(
 }
 
 fn parse_playerlistpos(arg: &str) -> PlayerPos {
-    let re = regex::Regex::new(r#"(\d{17}) ([^\s]+) \s+ \((.*)\) \((.*)\)"#).unwrap(); // TODO: get regex as arg?
+    let re = regex::Regex::new(r#"(\d{17})\s*([^\s]+)\s*\((.*)\) \((.*)\)"#).unwrap();
     let captures = re.captures(arg).unwrap();
     let steam_id_raw = captures[1].to_string();
     let player_position_raw = captures[3].to_string();
@@ -237,7 +237,7 @@ fn parse_playerlistpos(arg: &str) -> PlayerPos {
 }
 
 fn parse_listtoolcupboards(arg: &str) -> ToolCupboard {
-    let re = regex::Regex::new(r#"(\d{6})\s+\((.*)\)\s+(\d+)"#).unwrap(); // TODO: get regex as arg?
+    let re = regex::Regex::new(r#"(\d{6})\s+\((.*)\)\s+(\d+)"#).unwrap();
     let captures = re.captures(arg).unwrap();
     let entity_id_raw = captures[1].to_string();
     let position_raw = captures[2].to_string();
@@ -307,6 +307,17 @@ mod tests {
                 position: (-1027.08, 0.31, 668.11),
                 rotation: (-0.72, 0.00, 0.69),
                 steamd_id: "76561198135242017".to_string(),
+            }
+        );
+
+        assert_eq!(
+            parse_playerlistpos(
+                "76561198347416108 TheRedGam3r (-1804.55, 33.14, -696.72) (0.23, -0.59, 0.77)",
+            ),
+            PlayerPos {
+                position: (-1804.55, 33.14, -696.72),
+                rotation: (0.23, -0.59, 0.77),
+                steamd_id: "76561198347416108".to_string(),
             }
         );
     }
