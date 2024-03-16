@@ -5,11 +5,12 @@ use std::{
 
 mod config;
 mod rcon;
+mod sync;
 
 fn main() {
     // network resources
     let _tcp_listener: TcpListener;
-    let mut ws_rcon: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
+    let ws_rcon: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
 
     // constants
     let timeout_rcon = Duration::from_millis(1000);
@@ -23,30 +24,7 @@ fn main() {
         Ok((ws, _)) => {
             println!("Connected to RCON upstream WebSocket endpoint!");
             ws_rcon = ws;
-            loop {
-                let game_time = rcon::env_time(&mut ws_rcon, &timeout_rcon);
-                let playerlist = rcon::global_playerlist(&mut ws_rcon, &timeout_rcon);
-                let playerlistpos = rcon::global_playerlistpos(&mut ws_rcon, &timeout_rcon);
-                let players = rcon::merge_playerlists(playerlistpos, playerlist);
-                let tcs = rcon::global_listtoolcupboards(&mut ws_rcon, &timeout_rcon);
-                let sync_time_ms = SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis();
-                let state = rcon::State {
-                    players,
-                    tcs,
-                    game_time,
-                    sync_time_ms,
-                };
-                println!(
-                    "[{} {:?}] {} players, {} TCs",
-                    state.sync_time_ms,
-                    state.game_time,
-                    state.players.len(),
-                    state.tcs.len()
-                );
-            }
+            sync::sync_rcon(ws_rcon, timeout_rcon);
         }
         Err(err_connect_rcon) => {
             eprintln!(
