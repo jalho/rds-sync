@@ -1,15 +1,49 @@
-use std::{net::TcpListener, thread, time::Duration};
+use std::{
+    net::{TcpListener, TcpStream},
+    thread,
+    time::Duration,
+};
+
+use tungstenite::{handshake::server::NoCallback, HandshakeError, ServerHandshake};
 mod config;
 mod rcon;
 mod sync;
 
-fn main() -> Result<(), tungstenite::Error> {
+#[derive(Debug)]
+/// All the fatal errors that shall make the program terminate.
+enum ErrMainFatal {
+    /// All sorts of errors coming from `tungstenite`.
+    Tungstenite(tungstenite::Error),
+    StdIo(std::io::Error),
+    Handshake(HandshakeError<ServerHandshake<TcpStream, NoCallback>>),
+}
+impl From<tungstenite::Error> for ErrMainFatal {
+    fn from(e: tungstenite::Error) -> Self {
+        Self::Tungstenite(e)
+    }
+}
+impl From<std::io::Error> for ErrMainFatal {
+    fn from(e: std::io::Error) -> Self {
+        Self::StdIo(e)
+    }
+}
+impl From<HandshakeError<ServerHandshake<TcpStream, NoCallback>>> for ErrMainFatal {
+    fn from(e: HandshakeError<ServerHandshake<TcpStream, NoCallback>>) -> Self {
+        Self::Handshake(e)
+    }
+}
+
+fn main() -> Result<(), ErrMainFatal> {
     // network resources
-    let _tcp_listener: TcpListener;
+    let tcp_listener: TcpListener;
+
+    // main threads
+    let th_rcon_sync: thread::JoinHandle<()>;
+    let th_ws_server: thread::JoinHandle<()>;
 
     // constants
     let timeout_rcon = Duration::from_millis(1000);
-    // let listen_addr: &str = "0.0.0.0:8080";
+    let listen_addr: &str = "0.0.0.0:8080";
 
     // config
     let config: config::Config;
@@ -18,15 +52,18 @@ fn main() -> Result<(), tungstenite::Error> {
     let (ws_rcon, _) = tungstenite::connect(config.rcon_connection)?;
     println!("Connected to RCON upstream WebSocket endpoint!");
 
-    let th_rcon_sync: thread::JoinHandle<()>;
     th_rcon_sync = thread::spawn(move || sync::sync_rcon(ws_rcon, timeout_rcon));
 
-    // match TcpListener::bind(listen_addr) {
-    //     Ok(n) => {
-    //         _tcp_listener = n;
-    //     }
-    //     Err(_) => todo!(),
-    // }
+    tcp_listener = TcpListener::bind(listen_addr)?;
+    println!("Listen address bound!");
+    loop {
+        let (tcp_stream, _) = tcp_listener.accept()?;
+        println!("TCP accepted!");
+        let ws_downstream = tungstenite::accept(tcp_stream)?;
+        println!("WebSocket accepted!");
+
+        println!("Dropping downstream connection!");
+    }
 
     let _ = th_rcon_sync.join();
     return Ok(());
