@@ -1,26 +1,52 @@
-use std::net::{TcpListener, TcpStream};
+use std::{
+    net::{TcpListener, TcpStream},
+    time::{Duration, SystemTime},
+};
 
-// mod rcon;
 mod config;
+mod rcon;
 
 fn main() {
+    // network resources
     let _tcp_listener: TcpListener;
-    // let _state: rcon::State;
-    let _ws: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
-    let config: config::Config;
+    let mut ws_rcon: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
 
+    // constants
+    let timeout_rcon = Duration::from_millis(1000);
+    let listen_addr: &str = "0.0.0.0:8080";
+
+    // config
+    let config: config::Config;
     config = config::Config::get();
 
-    // _state = rcon::State {
-    //     players: vec![],
-    //     tcs: vec![],
-    //     game_time: rcon::EnvTime(0.0),
-    //     sync_time_ms: 0,
-    // };
     match tungstenite::connect(config.rcon_connection) {
         Ok((ws, _)) => {
             println!("Connected to RCON upstream WebSocket endpoint!");
-            _ws = ws;
+            ws_rcon = ws;
+            loop {
+                let game_time = rcon::env_time(&mut ws_rcon, &timeout_rcon);
+                let playerlist = rcon::global_playerlist(&mut ws_rcon, &timeout_rcon);
+                let playerlistpos = rcon::global_playerlistpos(&mut ws_rcon, &timeout_rcon);
+                let players = rcon::merge_playerlists(playerlistpos, playerlist);
+                let tcs = rcon::global_listtoolcupboards(&mut ws_rcon, &timeout_rcon);
+                let sync_time_ms = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+                let state = rcon::State {
+                    players,
+                    tcs,
+                    game_time,
+                    sync_time_ms,
+                };
+                println!(
+                    "[{} {:?}] {} players, {} TCs",
+                    state.sync_time_ms,
+                    state.game_time,
+                    state.players.len(),
+                    state.tcs.len()
+                );
+            }
         }
         Err(err_connect_rcon) => {
             eprintln!(
@@ -31,7 +57,7 @@ fn main() {
     }
     println!("Dropped connection to RCON upstream WebSocket endpoint!");
 
-    match TcpListener::bind("0.0.0.0:8080") {
+    match TcpListener::bind(listen_addr) {
         Ok(n) => {
             _tcp_listener = n;
         }
