@@ -2,6 +2,7 @@ use crate::rcon;
 use std::net::TcpStream;
 use std::time::Duration;
 use std::time::SystemTime;
+use tungstenite::WebSocket;
 
 /// Get game state over RCON.
 pub fn sync_rcon(
@@ -32,4 +33,8 @@ pub fn sync_rcon(
             state.tcs.len()
         );
     }
+}
+
+pub fn sync_downstream(ws_downstream: WebSocket<TcpStream>) {
+    println!("Dropping downstream connection!");
 }

@@ -61,8 +61,7 @@ fn main() -> Result<(), ErrMainFatal> {
         println!("TCP accepted!");
         let ws_downstream = tungstenite::accept(tcp_stream)?;
         println!("WebSocket accepted!");
-
-        println!("Dropping downstream connection!");
+        sync::sync_downstream(ws_downstream);
     }
 
     let _ = th_rcon_sync.join();
