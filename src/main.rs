@@ -1,4 +1,4 @@
-use std::{net::TcpListener, time::Duration};
+use std::{net::TcpListener, thread, time::Duration};
 mod config;
 mod rcon;
 mod sync;
@@ -17,7 +17,9 @@ fn main() -> Result<(), tungstenite::Error> {
 
     let (ws_rcon, _) = tungstenite::connect(config.rcon_connection)?;
     println!("Connected to RCON upstream WebSocket endpoint!");
-    sync::sync_rcon(ws_rcon, timeout_rcon);
+
+    let th_rcon_sync: thread::JoinHandle<()>;
+    th_rcon_sync = thread::spawn(move || sync::sync_rcon(ws_rcon, timeout_rcon));
 
     // match TcpListener::bind(listen_addr) {
     //     Ok(n) => {
@@ -26,5 +28,6 @@ fn main() -> Result<(), tungstenite::Error> {
     //     Err(_) => todo!(),
     // }
 
+    let _ = th_rcon_sync.join();
     return Ok(());
 }
