@@ -224,7 +224,7 @@ pub fn global_listtoolcupboards(
 }
 
 fn parse_playerlistpos(arg: &str) -> PlayerPos {
-    let re = regex::Regex::new(r#"(\d{17})\s*([^\s]+)\s*\((.*)\) \((.*)\)"#).unwrap();
+    let re = regex::Regex::new(r#"(\d{17})\s*([^\s]+)\s*\((.*)\)\s*\((.*)\)"#).unwrap();
     let captures = re.captures(arg).unwrap();
     let steam_id_raw = captures[1].to_string();
     let player_position_raw = captures[3].to_string();
@@ -318,6 +318,17 @@ mod tests {
                 position: (-1804.55, 33.14, -696.72),
                 rotation: (0.23, -0.59, 0.77),
                 steamd_id: "76561198347416108".to_string(),
+            }
+        );
+
+        assert_eq!(
+            parse_playerlistpos(
+                "76561198135242017 Raudus      (1627.04, 2.02, 1795.76)   (-0.15, 0.04, 0.99)",
+            ),
+            PlayerPos {
+                position: (1627.04, 2.02, 1795.76),
+                rotation: (-0.15, 0.04, 0.99),
+                steamd_id: "76561198135242017".to_string(),
             }
         );
     }
