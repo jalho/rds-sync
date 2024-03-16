@@ -33,7 +33,7 @@ pub fn sync_rcon(
 
         match sender.send(state) {
             Ok(_) => {
-                println!("Sent a state update!");
+                println!("Aggregated a state update for sending!");
             }
             Err(err) => {
                 eprintln!("Failed to send a state update! {}", err);
@@ -55,15 +55,22 @@ pub fn accept_websockets(
     }
 }
 
-pub fn sync_downstream(ws_downstream: WebSocket<TcpStream>, receiver: &Receiver<rcon::State>) {
+pub fn sync_downstream(mut ws_downstream: WebSocket<TcpStream>, receiver: &Receiver<rcon::State>) {
     loop {
         match receiver.recv() {
-            Ok(_) => {
-                println!("Got something!");
-            }
-            Err(err) => {
-                eprintln!("Failed to get something!");
-            }
+            Ok(state_update) => match serde_json::to_string(&state_update) {
+                Ok(serialized) => match ws_downstream.write(serialized.into()) {
+                    Ok(_) => match ws_downstream.flush() {
+                        Ok(_) => {
+                            println!("Sent a state update to downstream!");
+                        }
+                        Err(_) => todo!(),
+                    },
+                    Err(_) => todo!(),
+                },
+                Err(_) => todo!(),
+            },
+            Err(_) => todo!(),
         }
     }
     println!("Dropping downstream connection!");
