@@ -55,6 +55,7 @@ pub fn accept_websockets(
     }
 }
 
+// TODO: refactor this match-mess
 pub fn sync_downstream(mut ws_downstream: WebSocket<TcpStream>, receiver: &Receiver<rcon::State>) {
     loop {
         match receiver.recv() {
