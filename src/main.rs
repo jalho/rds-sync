@@ -1,8 +1,4 @@
-use std::{
-    net::TcpListener,
-    time::Duration,
-};
-
+use std::{net::TcpListener, time::Duration};
 mod config;
 mod rcon;
 mod sync;
