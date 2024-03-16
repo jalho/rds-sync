@@ -1,8 +1,7 @@
+use crate::rcon;
 use std::net::TcpStream;
 use std::time::Duration;
-
-use crate::rcon;
-use crate::SystemTime;
+use std::time::SystemTime;
 
 /// Get game state over RCON.
 pub fn sync_rcon(
