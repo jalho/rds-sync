@@ -1,4 +1,6 @@
 use crate::rcon;
+use crate::ErrMainFatal;
+use std::net::TcpListener;
 use std::net::TcpStream;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -32,6 +34,16 @@ pub fn sync_rcon(
             state.players.len(),
             state.tcs.len()
         );
+    }
+}
+
+pub fn accept_websockets(tcp_listener: TcpListener) -> Result<(), ErrMainFatal> {
+    loop {
+        let (tcp_stream, _) = tcp_listener.accept()?;
+        println!("TCP accepted!");
+        let ws_downstream = tungstenite::accept(tcp_stream)?;
+        println!("WebSocket accepted!");
+        sync_downstream(ws_downstream);
     }
 }
 

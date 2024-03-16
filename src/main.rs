@@ -1,6 +1,6 @@
 use std::{
     net::{TcpListener, TcpStream},
-    thread,
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
@@ -39,7 +39,7 @@ fn main() -> Result<(), ErrMainFatal> {
 
     // main threads
     let th_rcon_sync: thread::JoinHandle<()>;
-    let th_ws_server: thread::JoinHandle<()>;
+    let th_ws_server: JoinHandle<Result<(), ErrMainFatal>>;
 
     // constants
     let timeout_rcon = Duration::from_millis(1000);
@@ -51,19 +51,13 @@ fn main() -> Result<(), ErrMainFatal> {
 
     let (ws_rcon, _) = tungstenite::connect(config.rcon_connection)?;
     println!("Connected to RCON upstream WebSocket endpoint!");
-
     th_rcon_sync = thread::spawn(move || sync::sync_rcon(ws_rcon, timeout_rcon));
 
     tcp_listener = TcpListener::bind(listen_addr)?;
     println!("Listen address bound!");
-    loop {
-        let (tcp_stream, _) = tcp_listener.accept()?;
-        println!("TCP accepted!");
-        let ws_downstream = tungstenite::accept(tcp_stream)?;
-        println!("WebSocket accepted!");
-        sync::sync_downstream(ws_downstream);
-    }
+    th_ws_server = thread::spawn(move || sync::accept_websockets(tcp_listener));
 
     let _ = th_rcon_sync.join();
+    let _ = th_ws_server.join();
     return Ok(());
 }
