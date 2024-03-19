@@ -33,7 +33,7 @@ pub fn sync_rcon(
 
         match sender.send(state) {
             Ok(_) => {
-                println!("Aggregated a state update for sending!");
+                // println!("Aggregated a state update for sending!");
             }
             Err(err) => {
                 eprintln!("Failed to send a state update! {}", err);
@@ -63,22 +63,26 @@ pub fn sync_downstream(mut ws_downstream: WebSocket<TcpStream>, receiver: &Recei
                 Ok(serialized) => match ws_downstream.write(serialized.into()) {
                     Ok(_) => match ws_downstream.flush() {
                         Ok(_) => {
-                            println!("Sent a state update to downstream!");
+                            // println!("Sent a state update to downstream!");
                         }
                         Err(err) => {
-                            eprintln!("{}", err);
+                            eprintln!("Failed to flush: {} -- Dropping socket!", err);
+                            break;
                         },
                     },
                     Err(err) => {
                         eprintln!("{}", err);
+                        todo!();
                     },
                 },
                 Err(err) => {
                     eprintln!("{}", err);
+                    todo!();
                 },
             },
             Err(err) => {
                 eprintln!("{}", err);
+                todo!();
             },
         }
     }
