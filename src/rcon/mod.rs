@@ -245,7 +245,7 @@ fn parse_playerlistpos(arg: &str) -> PlayerPos {
 }
 
 fn parse_listtoolcupboards(arg: &str) -> ToolCupboard {
-    let re = regex::Regex::new(r#"(\d{6})\s+\((.*)\)\s+(\d+)"#).unwrap();
+    let re = regex::Regex::new(r#"(\d+)\s+\((.*)\)\s+(\d+)"#).unwrap();
     let captures = re.captures(arg).unwrap();
     let entity_id_raw = captures[1].to_string();
     let position_raw = captures[2].to_string();
@@ -352,6 +352,19 @@ mod tests {
                     x: 278.51,
                     z: 37.18,
                     y: 83.82
+                },
+            }
+        );
+
+        assert_eq!(
+            parse_listtoolcupboards("55220    (-211.04, 7.62, -605.48) 1",),
+            ToolCupboard {
+                auth_count: 1,
+                id: "55220".to_string(),
+                position: RconPosition {
+                    x: -211.04,
+                    z: 7.62,
+                    y: -605.48
                 },
             }
         );
