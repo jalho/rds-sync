@@ -171,10 +171,17 @@ pub fn env_time(
 
     // Match the float in e.g. `env.time: "10.63853"`
     let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap();
-    let captures = re.captures(&response_raw).unwrap();
-    let match_group = &captures[1];
-    let float = match_group.parse::<f64>().unwrap();
-    return EnvTime(float);
+    match re.captures(&response_raw) {
+        Some(captures) => {
+            let match_group = &captures[1];
+            let float = match_group.parse::<f64>().unwrap();
+            return EnvTime(float);
+        },
+        None => {
+            eprintln!("Failed to parse env.time response:\n{}", response_raw);
+            panic!();
+        },
+    }
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq)]
