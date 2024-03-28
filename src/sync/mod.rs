@@ -81,8 +81,7 @@ pub fn sync_downstream(mut ws_downstream: WebSocket<TcpStream>, receiver: &Recei
                 },
             },
             Err(err) => {
-                eprintln!("{}", err);
-                todo!();
+                eprintln!("{} -- trying to proceed regardless!", err); // this might not work...
             },
         }
     }
