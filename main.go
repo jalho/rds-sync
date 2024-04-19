@@ -10,18 +10,20 @@ import (
 
 /*
   Logger shenanigans to make it emit ISO formatted timestamps.
-  Copypasta from https://github.com/golang/go/issues/34416
 */
 type PrefixWriter struct {
-	f func() string
-	w io.Writer
+	write_prefix func() string
+	writer io.Writer
 }
-func (p PrefixWriter) Write(b []byte) (n int, err error) {
-	if n, err = p.w.Write([]byte(p.f())); err != nil {
+func (self PrefixWriter) Write(payload []byte) (n int, err error) {
+  prefix := []byte(self.write_prefix());
+  bytes_written_prefix, err_write_prefix := self.writer.Write(prefix)
+	if err_write_prefix != nil {
 		return
 	}
-	nn, err := p.w.Write(b)
-	return n + nn, err
+
+	bytes_written_payload, err_write_payload := self.writer.Write(payload)
+	return bytes_written_prefix + bytes_written_payload, err_write_payload
 }
 
 /*
@@ -35,8 +37,8 @@ func main() {
   // set up logger
 	log.SetFlags(0)
   log_writer := PrefixWriter{
-		f: func() string { return "[" + time.Now().Format(time.RFC3339) + "] " },
-		w: log.Writer(),
+		write_prefix: func() string { return "[" + time.Now().Format(time.RFC3339) + "] " },
+		writer: log.Writer(),
 	}
 	log.SetOutput(log_writer)
 
