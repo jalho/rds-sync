@@ -11,17 +11,18 @@ import (
 /*
   Logger shenanigans to make it emit ISO formatted timestamps.
 */
-type PrefixWriter struct {
+type PrefixedLogOutput struct {
 	write_prefix func() string
 	writer io.Writer
 }
-func (self PrefixWriter) Write(payload []byte) (n int, err error) {
+func (self PrefixedLogOutput) Write(payload []byte) (n int, err error) {
+  // write a prefix
   prefix := []byte(self.write_prefix());
   bytes_written_prefix, err_write_prefix := self.writer.Write(prefix)
 	if err_write_prefix != nil {
 		return
 	}
-
+  // write the actual payload
 	bytes_written_payload, err_write_payload := self.writer.Write(payload)
 	return bytes_written_prefix + bytes_written_payload, err_write_payload
 }
@@ -36,7 +37,7 @@ func (self PrefixWriter) Write(payload []byte) (n int, err error) {
 func main() {
   // set up logger
 	log.SetFlags(0)
-  log_writer := PrefixWriter{
+  log_writer := PrefixedLogOutput{
 		write_prefix: func() string { return "[" + time.Now().Format(time.RFC3339) + "] " },
 		writer: log.Writer(),
 	}
