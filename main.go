@@ -80,15 +80,19 @@ type ActivityMessage struct {
 func handle_message(event ActivityMessage, webhook_url string) {
 	switch event.Category {
     case PvP:
-      alert_discord(webhook_url, "Player vs Player event")
+      // TODO: accumulate stats
     case PvE:
-      alert_discord(webhook_url, "Player vs Environment event")
+      // TODO: accumulate stats
     case Farm:
-      alert_discord(webhook_url, "Farm event")
+      // TODO: accumulate stats
     case World:
-      alert_discord(webhook_url, "World event")
+      switch event.ID_Subject {
+        case "OnCargoShipSpawnCrate":
+          log.Printf("Alerting Discord!")
+          alert_discord(webhook_url, "Crate spawned on Cargo Ship!")
+      }
     default:
-      alert_discord(webhook_url, "Unknown event")
+      // Nothing to see here!
 	}
 }
 
