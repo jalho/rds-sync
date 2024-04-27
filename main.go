@@ -90,20 +90,17 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 	switch event.Category {
 	case PvP:
 		log.Printf(
-			"TODO: Got a 'PvP' event! %s -> %s",
+			"TODO: Got a PvP event! %s -> %s",
 			event.ID_Subject, event.ID_Object)
 	case PvE:
 		log.Printf(
-			"TODO: Got a 'PvE' event! %s -> %s",
+			"TODO: Got a PvE event! %s -> %s",
 			event.ID_Subject, event.ID_Object)
 	case Farm:
-		log.Printf(
-			"Got a 'Farm' event! %s -> %s: %d",
-			event.ID_Subject, event.ID_Object, event.Quantity)
 		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp)
 		stat := get_stat(store, event.ID_Subject, event.ID_Object)
 		log.Printf(
-			"'Farm' stats accumulated! %s -> %s: total: %d (from %s to %s)",
+			"Farm stats accumulated! %s -> %s: total: %d (from %s to %s)",
 			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.TimestampInit), as_date_iso(stat.TimestampLatest),
 		)
 	case World:
@@ -204,9 +201,6 @@ func main() {
 			log.Printf("Error while unmarshalling inbound message: %v", err_activity_message_unmarshal)
 			continue
 		}
-		log.Printf("Got message: timestamp: %d, category: %d, subject: '%s', object: '%s'",
-			activity_message_structured.Timestamp, activity_message_structured.Category,
-			activity_message_structured.ID_Subject, activity_message_structured.ID_Object)
 		handle_message(activity_message_structured, store_inmem, webhook_url)
 	}
 }
