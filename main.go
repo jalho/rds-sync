@@ -80,7 +80,13 @@ type ActivityMessage struct {
 	Quantity   uint64   `json:"quantity"`
 }
 
-func handle_message(event ActivityMessage, store map[string]map[string]uint, webhook_url string) {
+type Stat struct {
+	Quantity        uint
+	TimestampInit   uint64
+	TimestampLatest uint64
+}
+
+func handle_message(event ActivityMessage, store map[string]map[string]Stat, webhook_url string) {
 	switch event.Category {
 	case PvP:
 		log.Printf(
@@ -94,7 +100,7 @@ func handle_message(event ActivityMessage, store map[string]map[string]uint, web
 		log.Printf(
 			"TODO: Got a 'Farm' event! %s -> %s: %d",
 			event.ID_Subject, event.ID_Object, event.Quantity)
-		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity))
+		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp)
 		log.Printf(
 			"TODO: 'Farm' stats accumulated! %s -> %s: total: %d",
 			event.ID_Subject, event.ID_Object, get_stat(store, event.ID_Subject, event.ID_Object))
@@ -109,22 +115,30 @@ func handle_message(event ActivityMessage, store map[string]map[string]uint, web
 	}
 }
 
-func accumulate_stats(store map[string]map[string]uint, id_subject string, id_object string, quantity uint) {
+func accumulate_stats(store map[string]map[string]Stat, id_subject string, id_object string, quantity uint, timestamp uint64) {
 	if _, ok := store[id_subject]; !ok {
-		store[id_subject] = make(map[string]uint)
+		store[id_subject] = make(map[string]Stat)
 	}
 
 	if _, ok := store[id_subject][id_object]; !ok {
-		store[id_subject][id_object] = 0
+		store[id_subject][id_object] = Stat{
+			Quantity:        quantity,
+			TimestampInit:   timestamp,
+			TimestampLatest: timestamp,
+		}
+	} else {
+		store[id_subject][id_object] = Stat{
+			Quantity:        quantity + store[id_subject][id_object].Quantity,
+			TimestampInit:   store[id_subject][id_object].TimestampInit,
+			TimestampLatest: timestamp,
+		}
 	}
-
-	store[id_subject][id_object] += quantity
 }
 
-func get_stat(store map[string]map[string]uint, id_subject string, id_object string) uint {
+func get_stat(store map[string]map[string]Stat, id_subject string, id_object string) uint {
 	if _, ok := store[id_subject]; ok {
-		if quantity, ok := store[id_subject][id_object]; ok {
-			return quantity
+		if stat, ok := store[id_subject][id_object]; ok {
+			return stat.Quantity
 		}
 	}
 	return 0
@@ -146,7 +160,10 @@ func main() {
 	}
 	log.SetOutput(log_writer)
 
-	store_inmem := make(map[string]map[string]uint)
+	/*
+	  Stats accumulated in memory.
+	*/
+	store_inmem := make(map[string]map[string]Stat)
 
 	// set up stats receiving socket
 	socket_fs_path := "/tmp/rds-stats-collector.sock"
