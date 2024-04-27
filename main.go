@@ -98,12 +98,12 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 			event.ID_Subject, event.ID_Object)
 	case Farm:
 		log.Printf(
-			"TODO: Got a 'Farm' event! %s -> %s: %d",
+			"Got a 'Farm' event! %s -> %s: %d",
 			event.ID_Subject, event.ID_Object, event.Quantity)
 		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp)
 		stat := get_stat(store, event.ID_Subject, event.ID_Object)
 		log.Printf(
-			"TODO: 'Farm' stats accumulated! %s -> %s: total: %d (from %s to %s)",
+			"'Farm' stats accumulated! %s -> %s: total: %d (from %s to %s)",
 			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.TimestampInit), as_date_iso(stat.TimestampLatest),
 		)
 	case World:
