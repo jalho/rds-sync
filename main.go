@@ -73,17 +73,17 @@ const (
 
 type Category int
 type ActivityMessage struct {
-	Category   Category `json:"category"`
-	Timestamp  uint64   `json:"timestamp"`
-	ID_Subject string   `json:"id_subject"`
-	ID_Object  string   `json:"id_object"`
-	Quantity   uint64   `json:"quantity"`
+	Category          Category `json:"category"`
+	Timestamp_unix_ms uint64   `json:"timestamp"`
+	ID_Subject        string   `json:"id_subject"`
+	ID_Object         string   `json:"id_object"`
+	Quantity          uint64   `json:"quantity"`
 }
 
 type Stat struct {
-	Quantity        uint
-	TimestampInit   uint64
-	TimestampLatest uint64
+	Quantity                 uint
+	Timestamp_unix_ms_init   uint64
+	Timestamp_unix_ms_latest uint64
 }
 
 func handle_message(event ActivityMessage, store map[string]map[string]Stat, webhook_url string) {
@@ -97,11 +97,11 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 			"TODO: Got a PvE event! %s -> %s",
 			event.ID_Subject, event.ID_Object)
 	case Farm:
-		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp)
+		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp_unix_ms)
 		stat := get_stat(store, event.ID_Subject, event.ID_Object)
 		log.Printf(
 			"Farm stats accumulated! %s -> %s: total: %d (from %s to %s)",
-			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.TimestampInit), as_date_iso(stat.TimestampLatest),
+			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.Timestamp_unix_ms_init), as_date_iso(stat.Timestamp_unix_ms_latest),
 		)
 	case World:
 		switch event.ID_Subject {
@@ -126,15 +126,15 @@ func accumulate_stats(store map[string]map[string]Stat, id_subject string, id_ob
 
 	if _, ok := store[id_subject][id_object]; !ok {
 		store[id_subject][id_object] = Stat{
-			Quantity:        quantity,
-			TimestampInit:   timestamp,
-			TimestampLatest: timestamp,
+			Quantity:                 quantity,
+			Timestamp_unix_ms_init:   timestamp,
+			Timestamp_unix_ms_latest: timestamp,
 		}
 	} else {
 		store[id_subject][id_object] = Stat{
-			Quantity:        quantity + store[id_subject][id_object].Quantity,
-			TimestampInit:   store[id_subject][id_object].TimestampInit,
-			TimestampLatest: timestamp,
+			Quantity:                 quantity + store[id_subject][id_object].Quantity,
+			Timestamp_unix_ms_init:   store[id_subject][id_object].Timestamp_unix_ms_init,
+			Timestamp_unix_ms_latest: timestamp,
 		}
 	}
 }
