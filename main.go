@@ -101,9 +101,11 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 			"TODO: Got a 'Farm' event! %s -> %s: %d",
 			event.ID_Subject, event.ID_Object, event.Quantity)
 		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp)
+		stat := get_stat(store, event.ID_Subject, event.ID_Object)
 		log.Printf(
-			"TODO: 'Farm' stats accumulated! %s -> %s: total: %d",
-			event.ID_Subject, event.ID_Object, get_stat(store, event.ID_Subject, event.ID_Object))
+			"TODO: 'Farm' stats accumulated! %s -> %s: total: %d (from %s to %s)",
+			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.TimestampInit), as_date_iso(stat.TimestampLatest),
+		)
 	case World:
 		switch event.ID_Subject {
 		case "OnCargoShipSpawnCrate":
@@ -113,6 +115,11 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 	default:
 		// Nothing to see here!
 	}
+}
+
+func as_date_iso(timestamp uint64) string {
+	t := time.Unix(int64(timestamp), 0)
+	return t.Format(time.RFC3339)
 }
 
 func accumulate_stats(store map[string]map[string]Stat, id_subject string, id_object string, quantity uint, timestamp uint64) {
@@ -135,13 +142,14 @@ func accumulate_stats(store map[string]map[string]Stat, id_subject string, id_ob
 	}
 }
 
-func get_stat(store map[string]map[string]Stat, id_subject string, id_object string) uint {
+func get_stat(store map[string]map[string]Stat, id_subject string, id_object string) Stat {
 	if _, ok := store[id_subject]; ok {
 		if stat, ok := store[id_subject][id_object]; ok {
-			return stat.Quantity
+			return stat
 		}
 	}
-	return 0
+	// TODO: return some kinda error/null thingy instead?
+	return Stat{}
 }
 
 /*
