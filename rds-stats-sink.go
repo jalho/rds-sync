@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -86,7 +87,7 @@ type Stat struct {
 	Timestamp_unix_ms_latest uint64
 }
 
-func handle_message(event ActivityMessage, store map[string]map[string]Stat, webhook_url string) {
+func handle_message(event ActivityMessage, store map[string]map[string]Stat, webhook_url_alert_cargoship string) {
 	switch event.Category {
 	case PvP:
 		log.Printf(
@@ -107,7 +108,7 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 		switch event.ID_Subject {
 		case "OnCargoShipSpawnCrate":
 			log.Printf("Alerting Discord!")
-			alert_discord(webhook_url, "Crate spawned on Cargo Ship!")
+			alert_discord(webhook_url_alert_cargoship, "Crate spawned on Cargo Ship!")
 		}
 	default:
 		// Nothing to see here!
@@ -157,6 +158,10 @@ The sender is another process on the same host (namely a Carbon plugin loaded
 into RustDedicated).
 */
 func main() {
+	var webhook_url_alert_cargoship string
+	flag.StringVar(&webhook_url_alert_cargoship, "alert-cargoship", "", "Discord web hook URL fro Cargo Ship alerts")
+	flag.Parse()
+
 	// set up logger
 	log.SetFlags(0)
 	log_writer := PrefixedLogOutput{
@@ -184,7 +189,6 @@ func main() {
 	defer conn.Close()
 
 	// get messages and do stuff about them...
-	webhook_url := "http://127.0.0.1:8080/api/webhooks/0000000000000000000/0aa0aaaaaaa0aaaaa0aaaaaaaaaaaaaa0aaaa0aaaaaaa_aa-aaaaa_0aaaaaaaaa0aa"
 	buffer_inbound := make([]byte, 1024)
 	for {
 		// receive a message
@@ -201,6 +205,6 @@ func main() {
 			log.Printf("Error while unmarshalling inbound message: %v", err_activity_message_unmarshal)
 			continue
 		}
-		handle_message(activity_message_structured, store_inmem, webhook_url)
+		handle_message(activity_message_structured, store_inmem, webhook_url_alert_cargoship)
 	}
 }
