@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -150,6 +151,42 @@ func get_stat(store map[string]map[string]Stat, id_subject string, id_object str
 	return Stat{}
 }
 
+func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[string]Stat, webhook_url_alert_cargoship string, wg sync.WaitGroup) {
+	// set up stats receiving socket
+	socket_fs_path := "/tmp/rds-stats-collector.sock"
+	_ = os.Remove(socket_fs_path)
+	socket_unix_addr, err := net.ResolveUnixAddr("unixgram", socket_fs_path)
+	if err != nil {
+		log.Fatal("Error resolving Unix address:", err)
+	}
+	conn, err := net.ListenUnixgram("unixgram", socket_unix_addr)
+	if err != nil {
+		log.Fatal("Error listening on Unix socket:", err)
+	}
+	defer conn.Close()
+	defer wg.Done()
+
+	// get messages and do stuff about them...
+	buffer_inbound := make([]byte, 1024)
+	for {
+		// receive a message
+		n, _, err_read_inbound := conn.ReadFromUnix(buffer_inbound)
+		if err_read_inbound != nil {
+			log.Fatal("Error reading from Unix socket:", err_read_inbound)
+		}
+		message_inbound := string(buffer_inbound[:n])
+
+		// parse the received message
+		var activity_message_structured ActivityMessage
+		err_activity_message_unmarshal := json.Unmarshal([]byte(message_inbound), &activity_message_structured)
+		if err_activity_message_unmarshal != nil {
+			log.Printf("Error while unmarshalling inbound message: %v", err_activity_message_unmarshal)
+			continue
+		}
+		handle_message(activity_message_structured, store_inmem, webhook_url_alert_cargoship)
+	}
+}
+
 /*
 WHAT DO?
 
@@ -175,36 +212,10 @@ func main() {
 	*/
 	store_inmem := make(map[string]map[string]Stat)
 
-	// set up stats receiving socket
-	socket_fs_path := "/tmp/rds-stats-collector.sock"
-	_ = os.Remove(socket_fs_path)
-	socket_unix_addr, err := net.ResolveUnixAddr("unixgram", socket_fs_path)
-	if err != nil {
-		log.Fatal("Error resolving Unix address:", err)
-	}
-	conn, err := net.ListenUnixgram("unixgram", socket_unix_addr)
-	if err != nil {
-		log.Fatal("Error listening on Unix socket:", err)
-	}
-	defer conn.Close()
+	var wg sync.WaitGroup
 
-	// get messages and do stuff about them...
-	buffer_inbound := make([]byte, 1024)
-	for {
-		// receive a message
-		n, _, err_read_inbound := conn.ReadFromUnix(buffer_inbound)
-		if err_read_inbound != nil {
-			log.Fatal("Error reading from Unix socket:", err_read_inbound)
-		}
-		message_inbound := string(buffer_inbound[:n])
+	wg.Add(1)
+	go receive_events_from_rds_plugin_over_unix_sock(store_inmem, webhook_url_alert_cargoship, wg)
 
-		// parse the received message
-		var activity_message_structured ActivityMessage
-		err_activity_message_unmarshal := json.Unmarshal([]byte(message_inbound), &activity_message_structured)
-		if err_activity_message_unmarshal != nil {
-			log.Printf("Error while unmarshalling inbound message: %v", err_activity_message_unmarshal)
-			continue
-		}
-		handle_message(activity_message_structured, store_inmem, webhook_url_alert_cargoship)
-	}
+	wg.Wait()
 }
