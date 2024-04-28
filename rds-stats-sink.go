@@ -90,7 +90,7 @@ type Stat struct {
 	Timestamp_unix_ms_latest uint64
 }
 
-func handle_message(event ActivityMessage, store map[string]map[string]Stat, webhook_url_alert_cargoship string) {
+func handle_message(event ActivityMessage, webhook_url_alert_cargoship string) {
 	switch event.Category {
 	case PvP:
 		log.Printf(
@@ -101,8 +101,8 @@ func handle_message(event ActivityMessage, store map[string]map[string]Stat, web
 			"TODO: Got a PvE event! %s -> %s",
 			event.ID_Subject, event.ID_Object)
 	case Farm:
-		accumulate_stats(store, event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp_unix_ms)
-		stat := get_stat(store, event.ID_Subject, event.ID_Object)
+		accumulate_stats(event.ID_Subject, event.ID_Object, uint(event.Quantity), event.Timestamp_unix_ms)
+		stat := get_stat(event.ID_Subject, event.ID_Object)
 		log.Printf(
 			"Farm stats accumulated! %s -> %s: total: %d (from %s to %s)",
 			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.Timestamp_unix_ms_init), as_date_iso(stat.Timestamp_unix_ms_latest),
@@ -123,29 +123,29 @@ func as_date_iso(timestamp uint64) string {
 	return t.Format(time.RFC3339)
 }
 
-func accumulate_stats(store map[string]map[string]Stat, id_subject string, id_object string, quantity uint, timestamp uint64) {
-	if _, ok := store[id_subject]; !ok {
-		store[id_subject] = make(map[string]Stat)
+func accumulate_stats(id_subject string, id_object string, quantity uint, timestamp uint64) {
+	if _, ok := GLOBAL_store_inmem[id_subject]; !ok {
+		GLOBAL_store_inmem[id_subject] = make(map[string]Stat)
 	}
 
-	if _, ok := store[id_subject][id_object]; !ok {
-		store[id_subject][id_object] = Stat{
+	if _, ok := GLOBAL_store_inmem[id_subject][id_object]; !ok {
+		GLOBAL_store_inmem[id_subject][id_object] = Stat{
 			Quantity:                 quantity,
 			Timestamp_unix_ms_init:   timestamp,
 			Timestamp_unix_ms_latest: timestamp,
 		}
 	} else {
-		store[id_subject][id_object] = Stat{
-			Quantity:                 quantity + store[id_subject][id_object].Quantity,
-			Timestamp_unix_ms_init:   store[id_subject][id_object].Timestamp_unix_ms_init,
+		GLOBAL_store_inmem[id_subject][id_object] = Stat{
+			Quantity:                 quantity + GLOBAL_store_inmem[id_subject][id_object].Quantity,
+			Timestamp_unix_ms_init:   GLOBAL_store_inmem[id_subject][id_object].Timestamp_unix_ms_init,
 			Timestamp_unix_ms_latest: timestamp,
 		}
 	}
 }
 
-func get_stat(store map[string]map[string]Stat, id_subject string, id_object string) Stat {
-	if _, ok := store[id_subject]; ok {
-		if stat, ok := store[id_subject][id_object]; ok {
+func get_stat(id_subject string, id_object string) Stat {
+	if _, ok := GLOBAL_store_inmem[id_subject]; ok {
+		if stat, ok := GLOBAL_store_inmem[id_subject][id_object]; ok {
 			return stat
 		}
 	}
@@ -153,7 +153,7 @@ func get_stat(store map[string]map[string]Stat, id_subject string, id_object str
 	return Stat{}
 }
 
-func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[string]Stat, webhook_url_alert_cargoship string, wg *sync.WaitGroup) {
+func receive_events_from_rds_plugin_over_unix_sock(webhook_url_alert_cargoship string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// set up stats receiving socket
@@ -188,12 +188,21 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 			log.Printf("Error while unmarshalling inbound message: %v", err_activity_message_unmarshal)
 			continue
 		}
-		handle_message(activity_message_structured, store_inmem, webhook_url_alert_cargoship)
+		handle_message(activity_message_structured, webhook_url_alert_cargoship)
 	}
 }
 
-var upgrader = websocket.Upgrader{} // use default options
-var connections []*websocket.Conn
+var GLOBAL_upgrader = websocket.Upgrader{}
+
+/*
+WebSocket connections (to web browser clients).
+*/
+var GLOBAL_connections []*websocket.Conn
+
+/*
+Stats accumulated in memory.
+*/
+var GLOBAL_store_inmem = make(map[string]map[string]Stat)
 
 /*
 Upgrade to WebSocket connection and keep the socket until it gets closed.
@@ -205,7 +214,7 @@ by other mechanisms (namely per messages received from a Carbon plugin over a
 Unix domain socket).
 */
 func handle_websocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := GLOBAL_upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("Error while upgrading HTTP to WebSocket:", err)
 		return
@@ -213,8 +222,8 @@ func handle_websocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	defer remove_closed_connection(conn)
 
-	connections = append(connections, conn)
-	log.Printf("Accepted a WebSocket connection -- There are now %d connections", len(connections))
+	GLOBAL_connections = append(GLOBAL_connections, conn)
+	log.Printf("Accepted a WebSocket connection -- There are now %d connections", len(GLOBAL_connections))
 
 	// wait for the socket to close
 	for {
@@ -227,7 +236,7 @@ func handle_websocket(w http.ResponseWriter, r *http.Request) {
 		case websocket.TextMessage:
 			message_inbound_str := string(message_inbound)
 			if message_inbound_str == "init" {
-				store_json, err := json.Marshal(store_inmem)
+				store_json, err := json.Marshal(GLOBAL_store_inmem)
 				if err != nil {
 					log.Println("Error marshalling store to JSON:", err)
 					return
@@ -248,30 +257,25 @@ func handle_websocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func remove_closed_connection(closed_conn *websocket.Conn) {
-	for i, conn := range connections {
+	for i, conn := range GLOBAL_connections {
 		if conn == closed_conn {
 			// remove the connection from the slice by swapping it with the last element
-			connections[i] = connections[len(connections)-1]
-			connections = connections[:len(connections)-1]
-			log.Printf("Connection ref removed -- There are now %d connections", len(connections))
+			GLOBAL_connections[i] = GLOBAL_connections[len(GLOBAL_connections)-1]
+			GLOBAL_connections = GLOBAL_connections[:len(GLOBAL_connections)-1]
+			log.Printf("Connection ref removed -- There are now %d connections", len(GLOBAL_connections))
 			break
 		}
 	}
 }
 
 func publish_message(message []byte) {
-	for _, conn := range connections {
+	for _, conn := range GLOBAL_connections {
 		err := conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
 			log.Println("Error while publishing a message to a WebSocket:", err)
 		}
 	}
 }
-
-/*
-Stats accumulated in memory.
-*/
-var store_inmem = make(map[string]map[string]Stat)
 
 /*
 WHAT DO?
@@ -298,7 +302,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go receive_events_from_rds_plugin_over_unix_sock(store_inmem, webhook_url_alert_cargoship, &wg)
+	go receive_events_from_rds_plugin_over_unix_sock(webhook_url_alert_cargoship, &wg)
 
 	http.HandleFunc("/", handle_websocket)
 	log.Fatal(http.ListenAndServe(http_listen_addr, nil))
