@@ -159,7 +159,7 @@ into RustDedicated).
 */
 func main() {
 	var webhook_url_alert_cargoship string
-	flag.StringVar(&webhook_url_alert_cargoship, "alert-cargoship", "", "Discord web hook URL fro Cargo Ship alerts")
+	flag.StringVar(&webhook_url_alert_cargoship, "alert-cargoship", "", "Discord web hook URL for Cargo Ship alerts")
 	flag.Parse()
 
 	// set up logger
