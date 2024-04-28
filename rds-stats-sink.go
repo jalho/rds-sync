@@ -193,6 +193,15 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 var upgrader = websocket.Upgrader{} // use default options
 var connections []*websocket.Conn
 
+/*
+Upgrade to WebSocket connection and keep the socket until it gets closed.
+
+Send store init as a response to TextMessage "init".
+
+Further incremental store updates are intended to be dispatched on-demand
+by other mechanisms (namely per messages received from a Carbon plugin over a
+Unix domain socket).
+*/
 func handle_websocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -205,25 +214,27 @@ func handle_websocket(w http.ResponseWriter, r *http.Request) {
 	connections = append(connections, conn)
 	log.Printf("Accepted a WebSocket connection -- There are now %d connections", len(connections))
 
-	store_json, err := json.Marshal(store_inmem)
-	if err != nil {
-		log.Println("Error marshalling store to JSON:", err)
-		return
-	}
-	err = conn.WriteMessage(websocket.TextMessage, store_json)
-	if err != nil {
-		log.Println("Error while writing a message to WebSocket:", err)
-	}
-
 	// wait for the socket to close
 	for {
-		message_type_inbound, _, err := conn.ReadMessage()
+		message_type_inbound, message_inbound, err := conn.ReadMessage()
 		if err != nil {
 			log.Println("Error reading message from WebSocket:", err)
 			break
 		}
 		switch message_type_inbound {
 		case websocket.TextMessage:
+			message_inbound_str := string(message_inbound)
+			if message_inbound_str == "init" {
+				store_json, err := json.Marshal(store_inmem)
+				if err != nil {
+					log.Println("Error marshalling store to JSON:", err)
+					return
+				}
+				err = conn.WriteMessage(websocket.TextMessage, store_json)
+				if err != nil {
+					log.Println("Error while writing store init message to WebSocket:", err)
+				}
+			}
 			continue
 		case websocket.BinaryMessage:
 			continue
