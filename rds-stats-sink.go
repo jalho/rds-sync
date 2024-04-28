@@ -191,36 +191,56 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 }
 
 var upgrader = websocket.Upgrader{} // use default options
+var connections []*websocket.Conn
 
 func handle_websocket(w http.ResponseWriter, r *http.Request) {
-	socket, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("Error while upgrading HTTP to WebSocket:", err)
 		return
 	}
-	defer socket.Close()
-	for {
-		message_type_inbound, message_inbound, err := socket.ReadMessage()
-		if err != nil {
-			log.Println("Error while reading a message from WebSocket:", err)
-			break
-		}
-		message_outbound := message_inbound
-		err = socket.WriteMessage(message_type_inbound, message_outbound)
-		if err != nil {
-			log.Println("Error while writing an echo message to WebSocket:", err)
-			break
-		}
+	defer conn.Close()
+	defer remove_closed_connection(conn)
 
-		store_json, err := json.Marshal(store_inmem)
+	connections = append(connections, conn)
+	log.Printf("Accepted a WebSocket connection -- There are now %d connections", len(connections))
+
+	store_json, err := json.Marshal(store_inmem)
+	if err != nil {
+		log.Println("Error marshalling store to JSON:", err)
+		return
+	}
+	err = conn.WriteMessage(websocket.TextMessage, store_json)
+	if err != nil {
+		log.Println("Error while writing a message to WebSocket:", err)
+	}
+
+	// wait for the socket to close
+	for {
+		message_type_inbound, _, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Error marshalling store to JSON:", err)
-			return
+			log.Println("Error reading message from WebSocket:", err)
+			break
 		}
-		// TODO: define message type
-		err = socket.WriteMessage(message_type_inbound, store_json)
-		if err != nil {
-			log.Println("Error while writing a message to WebSocket:", err)
+		switch message_type_inbound {
+		case websocket.TextMessage:
+			continue
+		case websocket.BinaryMessage:
+			continue
+		case websocket.CloseMessage:
+			log.Println("Closing WebSocket connection normally")
+		}
+	}
+	log.Printf("Dropping WebSocket!")
+}
+
+func remove_closed_connection(closed_conn *websocket.Conn) {
+	for i, conn := range connections {
+		if conn == closed_conn {
+			// remove the connection from the slice by swapping it with the last element
+			connections[i] = connections[len(connections)-1]
+			connections = connections[:len(connections)-1]
+			log.Printf("Connection ref removed -- There are now %d connections", len(connections))
 			break
 		}
 	}
