@@ -12,6 +12,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 /*
@@ -22,15 +24,15 @@ type PrefixedLogOutput struct {
 	writer       io.Writer
 }
 
-func (self PrefixedLogOutput) Write(payload []byte) (n int, err error) {
+func (log_output PrefixedLogOutput) Write(payload []byte) (n int, err error) {
 	// write a prefix
-	prefix := []byte(self.write_prefix())
-	bytes_written_prefix, err_write_prefix := self.writer.Write(prefix)
+	prefix := []byte(log_output.write_prefix())
+	bytes_written_prefix, err_write_prefix := log_output.writer.Write(prefix)
 	if err_write_prefix != nil {
 		return
 	}
 	// write the actual payload
-	bytes_written_payload, err_write_payload := self.writer.Write(payload)
+	bytes_written_payload, err_write_payload := log_output.writer.Write(payload)
 	return bytes_written_prefix + bytes_written_payload, err_write_payload
 }
 
@@ -55,13 +57,13 @@ func alert_discord(webhook_url string, webhook_message_content string) {
 func http_post(url string, payload []byte) (*http.Response, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
-		return nil, fmt.Errorf("Error creating HTTP request: %v", err)
+		return nil, fmt.Errorf("error creating HTTP request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Error sending HTTP request: %v", err)
+		return nil, fmt.Errorf("error sending HTTP request: %v", err)
 	}
 	return resp, nil
 }
@@ -151,7 +153,9 @@ func get_stat(store map[string]map[string]Stat, id_subject string, id_object str
 	return Stat{}
 }
 
-func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[string]Stat, webhook_url_alert_cargoship string, wg sync.WaitGroup) {
+func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[string]Stat, webhook_url_alert_cargoship string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	// set up stats receiving socket
 	socket_fs_path := "/tmp/rds-stats-collector.sock"
 	_ = os.Remove(socket_fs_path)
@@ -164,7 +168,6 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 		log.Fatal("Error listening on Unix socket:", err)
 	}
 	defer conn.Close()
-	defer wg.Done()
 
 	// get messages and do stuff about them...
 	buffer_inbound := make([]byte, 1024)
@@ -187,6 +190,47 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 	}
 }
 
+var upgrader = websocket.Upgrader{} // use default options
+
+func handle_websocket(w http.ResponseWriter, r *http.Request) {
+	socket, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("Error while upgrading HTTP to WebSocket:", err)
+		return
+	}
+	defer socket.Close()
+	for {
+		message_type_inbound, message_inbound, err := socket.ReadMessage()
+		if err != nil {
+			log.Println("Error while reading a message from WebSocket:", err)
+			break
+		}
+		message_outbound := message_inbound
+		err = socket.WriteMessage(message_type_inbound, message_outbound)
+		if err != nil {
+			log.Println("Error while writing an echo message to WebSocket:", err)
+			break
+		}
+
+		store_json, err := json.Marshal(store_inmem)
+		if err != nil {
+			log.Println("Error marshalling store to JSON:", err)
+			return
+		}
+		// TODO: define message type
+		err = socket.WriteMessage(message_type_inbound, store_json)
+		if err != nil {
+			log.Println("Error while writing a message to WebSocket:", err)
+			break
+		}
+	}
+}
+
+/*
+Stats accumulated in memory.
+*/
+var store_inmem = make(map[string]map[string]Stat)
+
 /*
 WHAT DO?
 
@@ -197,6 +241,8 @@ into RustDedicated).
 func main() {
 	var webhook_url_alert_cargoship string
 	flag.StringVar(&webhook_url_alert_cargoship, "alert-cargoship", "", "Discord web hook URL for Cargo Ship alerts")
+	var http_listen_addr string
+	flag.StringVar(&http_listen_addr, "http-listen-addr", "0.0.0.0:8080", "HTTP/WebSocket service address")
 	flag.Parse()
 
 	// set up logger
@@ -207,15 +253,13 @@ func main() {
 	}
 	log.SetOutput(log_writer)
 
-	/*
-	  Stats accumulated in memory.
-	*/
-	store_inmem := make(map[string]map[string]Stat)
-
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go receive_events_from_rds_plugin_over_unix_sock(store_inmem, webhook_url_alert_cargoship, wg)
+	go receive_events_from_rds_plugin_over_unix_sock(store_inmem, webhook_url_alert_cargoship, &wg)
+
+	http.HandleFunc("/", handle_websocket)
+	log.Fatal(http.ListenAndServe(http_listen_addr, nil))
 
 	wg.Wait()
 }
