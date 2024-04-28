@@ -177,7 +177,9 @@ func receive_events_from_rds_plugin_over_unix_sock(store_inmem map[string]map[st
 		if err_read_inbound != nil {
 			log.Fatal("Error reading from Unix socket:", err_read_inbound)
 		}
-		message_inbound := string(buffer_inbound[:n])
+		var bytes_inbound = buffer_inbound[:n]
+		publish_message(bytes_inbound)
+		message_inbound := string(bytes_inbound)
 
 		// parse the received message
 		var activity_message_structured ActivityMessage
@@ -253,6 +255,15 @@ func remove_closed_connection(closed_conn *websocket.Conn) {
 			connections = connections[:len(connections)-1]
 			log.Printf("Connection ref removed -- There are now %d connections", len(connections))
 			break
+		}
+	}
+}
+
+func publish_message(message []byte) {
+	for _, conn := range connections {
+		err := conn.WriteMessage(websocket.TextMessage, message)
+		if err != nil {
+			log.Println("Error while publishing a message to a WebSocket:", err)
 		}
 	}
 }
