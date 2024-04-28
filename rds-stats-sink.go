@@ -85,9 +85,9 @@ type ActivityMessage struct {
 }
 
 type Stat struct {
-	Quantity                 uint
-	Timestamp_unix_ms_init   uint64
-	Timestamp_unix_ms_latest uint64
+	Quantity                  uint
+	Timestamp_unix_sec_init   uint64
+	Timestamp_unix_sec_latest uint64
 }
 
 func handle_message(event ActivityMessage, webhook_url_alert_cargoship string) {
@@ -105,7 +105,7 @@ func handle_message(event ActivityMessage, webhook_url_alert_cargoship string) {
 		stat := get_stat(event.ID_Subject, event.ID_Object)
 		log.Printf(
 			"Farm stats accumulated! %s -> %s: total: %d (from %s to %s)",
-			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.Timestamp_unix_ms_init), as_date_iso(stat.Timestamp_unix_ms_latest),
+			event.ID_Subject, event.ID_Object, stat.Quantity, as_date_iso(stat.Timestamp_unix_sec_init), as_date_iso(stat.Timestamp_unix_sec_latest),
 		)
 	case World:
 		switch event.ID_Subject {
@@ -130,15 +130,15 @@ func accumulate_stats(id_subject string, id_object string, quantity uint, timest
 
 	if _, ok := GLOBAL_store_inmem[id_subject][id_object]; !ok {
 		GLOBAL_store_inmem[id_subject][id_object] = Stat{
-			Quantity:                 quantity,
-			Timestamp_unix_ms_init:   timestamp,
-			Timestamp_unix_ms_latest: timestamp,
+			Quantity:                  quantity,
+			Timestamp_unix_sec_init:   timestamp,
+			Timestamp_unix_sec_latest: timestamp,
 		}
 	} else {
 		GLOBAL_store_inmem[id_subject][id_object] = Stat{
-			Quantity:                 quantity + GLOBAL_store_inmem[id_subject][id_object].Quantity,
-			Timestamp_unix_ms_init:   GLOBAL_store_inmem[id_subject][id_object].Timestamp_unix_ms_init,
-			Timestamp_unix_ms_latest: timestamp,
+			Quantity:                  quantity + GLOBAL_store_inmem[id_subject][id_object].Quantity,
+			Timestamp_unix_sec_init:   GLOBAL_store_inmem[id_subject][id_object].Timestamp_unix_sec_init,
+			Timestamp_unix_sec_latest: timestamp,
 		}
 	}
 }
