@@ -192,7 +192,20 @@ func receive_events_from_rds_plugin_over_unix_sock(webhook_url_alert_cargoship s
 	}
 }
 
-var GLOBAL_upgrader = websocket.Upgrader{}
+const WEBSOCKET_EXPECTED_ORIGIN_ENV string = "REINDEERLAND_WS_EXPECTED_ORIGIN"
+
+var GLOBAL_upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		expected_origin := os.Getenv(WEBSOCKET_EXPECTED_ORIGIN_ENV) // e.g. "http://65.109.226.175"
+		origin := r.Header.Get("Origin")
+		is_match := origin == expected_origin
+		if !is_match {
+			log.Printf("Rejecting WebSocket handshake due to request 'Origin' header's value '%s' not matching expected origin '%s' (defined by env var '%s')",
+				origin, expected_origin, WEBSOCKET_EXPECTED_ORIGIN_ENV)
+		}
+		return is_match
+	},
+}
 
 /*
 WebSocket connections (to web browser clients).
