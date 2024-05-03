@@ -192,16 +192,14 @@ func receive_events_from_rds_plugin_over_unix_sock(webhook_url_alert_cargoship s
 	}
 }
 
-const WEBSOCKET_EXPECTED_ORIGIN_ENV string = "REINDEERLAND_WS_EXPECTED_ORIGIN"
-
 var GLOBAL_upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		expected_origin := os.Getenv(WEBSOCKET_EXPECTED_ORIGIN_ENV) // e.g. "http://65.109.226.175"
+		expected_origin := os.Getenv(ENV_WEBSOCKET_EXPECTED_ORIGIN) // e.g. "http://172.17.252.185:8000"
 		origin := r.Header.Get("Origin")
 		is_match := origin == expected_origin
 		if !is_match {
 			log.Printf("Rejecting WebSocket handshake due to request 'Origin' header's value '%s' not matching expected origin '%s' (defined by env var '%s')",
-				origin, expected_origin, WEBSOCKET_EXPECTED_ORIGIN_ENV)
+				origin, expected_origin, ENV_WEBSOCKET_EXPECTED_ORIGIN)
 		}
 		return is_match
 	},
@@ -290,6 +288,14 @@ func publish_message(message []byte) {
 	}
 }
 
+func is_env_set(envVar string) bool {
+	_, exists := os.LookupEnv(envVar)
+	return exists
+}
+
+const ENV_WEBSOCKET_EXPECTED_ORIGIN string = "RDSSINK_WS_EXPECTED_ORIGIN"
+const ENV_WEBSOCKET_RCON_UPSTREAM string = "RDSSINK_WS_RCON_UPSTREAM"
+
 /*
 WHAT DO?
 
@@ -298,6 +304,15 @@ The sender is another process on the same host (namely a Carbon plugin loaded
 into RustDedicated).
 */
 func main() {
+	if !is_env_set(ENV_WEBSOCKET_EXPECTED_ORIGIN) {
+		fmt.Fprintf(os.Stderr, "Error: Environment variable %s is not set! Set e.g. 'http://172.17.252.185:8000'\n", ENV_WEBSOCKET_EXPECTED_ORIGIN)
+		os.Exit(1)
+	}
+	if !is_env_set(ENV_WEBSOCKET_RCON_UPSTREAM) {
+		fmt.Fprintf(os.Stderr, "Error: Environment variable %s is not set! Set e.g. 'ws://127.0.0.1:28016/Your_Rcon_Password'\n", ENV_WEBSOCKET_RCON_UPSTREAM)
+		os.Exit(1)
+	}
+
 	var webhook_url_alert_cargoship string
 	flag.StringVar(&webhook_url_alert_cargoship, "alert-cargoship", "", "Discord web hook URL for Cargo Ship alerts")
 	var http_listen_addr string
