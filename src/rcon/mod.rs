@@ -89,6 +89,7 @@ pub fn global_playerlist(
 }
 
 #[derive(Debug, Serialize)]
+#[derive(PartialEq)]
 pub struct EnvTime(pub f64);
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -168,17 +169,20 @@ pub fn env_time(
 ) -> Option<EnvTime> {
     let rcon_symbol = "env.time";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
+    return parse_env_time(&response_raw);
+}
 
-    // Match the float in e.g. `env.time: "10.63853"`
-    let re = regex::Regex::new(r#"env\.time:\s*"(\d+\.\d+)""#).unwrap();
-    match re.captures(&response_raw) {
+// Match the float in e.g. `env.time: "10.63853"` or `env.time: "10"`
+fn parse_env_time(data: &String) -> Option<EnvTime> {
+    let re = regex::Regex::new(r#"env\.time:\s*"(.+)""#).unwrap();
+    match re.captures(&data) {
         Some(captures) => {
             let match_group = &captures[1];
             let float = match_group.parse::<f64>().unwrap();
             return Some(EnvTime(float));
         },
         None => {
-            eprintln!("Failed to parse env.time response:\n{}", response_raw);
+            eprintln!("Failed to parse env.time response:\n{}", &data);
             return None;
         },
     }
@@ -309,6 +313,20 @@ mod tests {
         assert_eq!(
             parse_float_triple(&"821.94, 0.00, -676.77".to_string()),
             (821.94, 0.00, -676.77)
+        );
+    }
+
+    #[test]
+    fn test_parse_env_time() {
+        assert_eq!(
+            parse_env_time(&"env.time: \"10.63853\"".to_string()),
+            Some(EnvTime(10.63853)),
+            "env.time: \"10.63853\""
+        );
+        assert_eq!(
+            parse_env_time(&"env.time: \"10\"".to_string()),
+            Some(EnvTime(10.0)),
+            "env.time: \"10\""
         );
     }
 
