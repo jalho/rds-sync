@@ -1,4 +1,5 @@
 use crate::rcon;
+use crate::rcon::EnvTime;
 use crate::ErrMainFatal;
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -24,10 +25,22 @@ pub fn sync_rcon(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis();
+
+        let time: EnvTime;
+        match game_time {
+            Some(t) => {
+                time = t;
+            },
+            None => {
+                eprintln!("Fetching env.time failed -- Falling back to 0.0");
+                time = rcon::EnvTime(0.0);
+            },
+        }
+
         let state = rcon::State {
             players,
             tcs,
-            game_time,
+            game_time: time,
             sync_time_ms,
         };
 

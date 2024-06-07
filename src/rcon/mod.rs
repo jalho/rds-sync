@@ -165,7 +165,7 @@ pub fn merge_playerlists(playerlistpos: PlayerPosList, playerlist: PlayerList) -
 pub fn env_time(
     websocket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     timeout: &std::time::Duration,
-) -> EnvTime {
+) -> Option<EnvTime> {
     let rcon_symbol = "env.time";
     let response_raw = send_rcon_command(websocket, rcon_symbol, timeout);
 
@@ -175,11 +175,11 @@ pub fn env_time(
         Some(captures) => {
             let match_group = &captures[1];
             let float = match_group.parse::<f64>().unwrap();
-            return EnvTime(float);
+            return Some(EnvTime(float));
         },
         None => {
             eprintln!("Failed to parse env.time response:\n{}", response_raw);
-            panic!();
+            return None;
         },
     }
 }
